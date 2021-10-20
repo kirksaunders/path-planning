@@ -124,10 +124,11 @@ def main():
     env = PathPlanningEnv("grid1.bmp", DIM)
     rb = ReplayBuffer(50, [(11, 11), 2])
     state = env.reset(np.array([10, 10]), np.array([3, 3]))
-    for i in range(0, 500):
-        print(state)
-        prediction = nn.predict(state)
+    for i in range(0, 50):
+        input = [state[0].reshape((1, 11, 11)), state[1].reshape((1, 2))]
+        prediction = nn.predict(input)
         action = np.argmax(prediction)
+        print(action)
         next_state, reward, terminal = env.step(action)
         rb.add(state, action, reward, terminal, next_state)
         state = next_state
