@@ -29,19 +29,19 @@ class ReplayBuffer:
         self.terminal = np.empty(capacity, dtype=bool)
         self.next_state_arrays = copy.deepcopy(self.state_arrays)
 
-    def add(self, states, action, reward, terminal, next_states):
-        assert(type(states) is list)
-        assert(type(next_states) is list)
-        assert(len(states) == len(self.state_arrays))
-        assert(len(next_states) == len(self.next_state_arrays))
+    def add(self, state, action, reward, terminal, next_state):
+        assert(type(state) is list)
+        assert(type(next_state) is list)
+        assert(len(state) == len(self.state_arrays))
+        assert(len(next_state) == len(self.next_state_arrays))
 
-        for i in range(0, len(states)):
-            self.state_arrays[i][self.insert_index, ...] = states[i]
+        for i in range(0, len(state)):
+            self.state_arrays[i][self.insert_index, ...] = state[i]
         self.actions[self.insert_index] = action
         self.rewards[self.insert_index] = reward
         self.terminal[self.insert_index] = terminal
-        for i in range(0, len(next_states)):
-            self.next_state_arrays[i][self.insert_index, ...] = next_states[i]
+        for i in range(0, len(next_state)):
+            self.next_state_arrays[i][self.insert_index, ...] = next_state[i]
 
         self.insert_index += 1
         if self.insert_index >= self.capacity:
@@ -119,19 +119,62 @@ def create_nn():
 
     return tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
+def state_to_tf_input(state):
+    return [x.reshape((1, *(x.shape))) for x in state]
+
+def model_input_shape(nn):
+    shapes = [None] * len(nn.input)
+    for i in range(0, len(nn.input)):
+        _, *rest = nn.input[i].shape
+        shapes[i] = tuple(rest)
+
+    return shapes
+
+def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, copy_interval):
+    replay_buffer = ReplayBuffer(replay_size, model_input_shape(q))
+    q_target = tf.keras.model.clone_model(q)
+    q_target.set_weights(q.get_weights())
+
+    iteration = 0
+    while True:
+        state = env.reset(random=True)
+        for t in range(0, episode_step_limit):
+            iteration += 1
+            if np.random.random() > epsilon:
+                action = q.predict(state_to_tf_input(state)).argmax()
+            else:
+                action = np.random.choice(env.num_actions)
+
+            next_state, reward, terminal = env.step(action)
+            replay_buffer.add(state, action, reward, terminal, next_state)
+
+            states, actions, rewards, terminals, next_states = replay_buffer.mini_batch(min(iteration, batch_size))
+            actions_one_hot = tf.keras.utils.to_categorical(actions, env.num_actions, dtype=np.float32)
+            q_target_max = q_target.predict(next_states).max(axis=1)
+
+            q_target = rewards + q_target_max.multiply(terminals.invert()) * gamma
+
+            with tf.GradientTape() as tape:
+                q_values = tf.reduce_sum(tf.multiply(q.predict(states), actions_one_hot), axis=1)
+                loss = tf.reduce_mean(tf.square(q_target - q_values))
+
+            gradients = tape.gradient(loss, q.trainable_variables)
+            q.optimizer.apply_gradients(zip(gradients, q.trainable_variables))
+
+            print("Iteration {} complete with loss {}".format(iteration, loss))
+
+            state = next_state
+
+            if iteration % copy_interval == 0:
+                q_target.set_weights(q.get_weights())
+
+            if terminal:
+                break
+
 def main():
-    nn = create_nn()
+    model = create_nn()
     env = PathPlanningEnv("grid1.bmp", DIM)
-    rb = ReplayBuffer(50, [(11, 11), 2])
-    state = env.reset(np.array([10, 10]), np.array([3, 3]))
-    for i in range(0, 50):
-        input = [state[0].reshape((1, 11, 11)), state[1].reshape((1, 2))]
-        prediction = nn.predict(input)
-        action = np.argmax(prediction)
-        print(action)
-        next_state, reward, terminal = env.step(action)
-        rb.add(state, action, reward, terminal, next_state)
-        state = next_state
+    dqn(env, model, 0.999, 0.1, 100, 128, 32, 100)
 
 if __name__=='__main__':
     main()

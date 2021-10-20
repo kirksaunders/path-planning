@@ -14,14 +14,26 @@ class PathPlanningEnv:
         self.grid = 1 - np.sign(self.grid)
 
         self.pos = np.array([0, 0])
-        self.goal = np.array([width-1, height-1])
+        self.goal = np.array([0, 0])
 
         self.num_actions = 8
         self.dim = dim
 
-    def reset(self, start, goal):
-        self.pos = start
-        self.goal = goal
+    def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=False):
+        if random:
+            while True:
+                self.pos = np.array([np.random.choice(self.grid_width), np.random.choice(self.grid_height)])
+                if self.grid[self.pos[1], self.pos[0]] == 0:
+                    break
+
+            while True:
+                self.goal = np.array([np.random.choice(self.grid_width), np.random.choice(self.grid_height)])
+                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos):
+                    break
+        else:
+            self.pos = start
+            self.goal = goal
+            
         return self.get_state()
 
     def move(self, dir):
@@ -66,14 +78,14 @@ class PathPlanningEnv:
         return self.get_state(), reward, terminal
 
     def get_state(self):
-        state = np.ones((self.dim*2 + 1, self.dim*2 + 1))
+        state = np.ones((self.dim*2 + 1, self.dim*2 + 1, 1))
         for dy in range(-self.dim, self.dim + 1):
             y = self.pos[1] + dy
             if y >=0 and y < self.grid_height:
                 for dx in range(-self.dim, self.dim + 1):
                     x = self.pos[0] + dx
                     if x >= 0 and x < self.grid_width:
-                        state[dy+self.dim, dx+self.dim] = self.grid[y, x]
+                        state[dy+self.dim, dx+self.dim, 0] = self.grid[y, x]
 
         return [state, (self.goal - self.pos)]
                 
