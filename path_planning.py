@@ -1,6 +1,11 @@
+import copy
 from env import PathPlanningEnv
 import numpy as np
-import copy
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+import tensorflow as tf
+
+DIM = 5
 
 class ReplayBuffer:
     def __init__(self, capacity, state_shapes):
@@ -69,17 +74,63 @@ class ReplayBuffer:
 
         return state_arrays, actions, rewards, terminal, next_state_arrays
 
-def main():
-    env = PathPlanningEnv("grid1.bmp")
-    rb = ReplayBuffer(50, [(11, 11), 2])
-    states = env.reset(np.array([10, 10]), np.array([3, 3]))
-    for i in range(0, 500):
-        action = np.random.choice(env.num_actions)
-        next_states, reward, terminal = env.step(action)
-        rb.add(list(states), action, reward, terminal, list(next_states))
-        states = next_states
+def create_cnn():
+    return tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(
+            filters = 8,
+            kernel_size = 4,
+            strides = 1,
+            activation = 'relu',
+            padding = "same",
+            input_shape = (2*DIM+1, 2*DIM+1, 1)
+        ),
+        tf.keras.layers.MaxPooling2D(
+            pool_size = 2,
+            padding = "same"
+        ),
+        tf.keras.layers.Conv2D(
+            filters = 16,
+            kernel_size = 4,
+            strides = 1,
+            activation = 'relu',
+            padding = "same",
+        ),
+        tf.keras.layers.MaxPooling2D(
+            pool_size = 2,
+            padding = "same"
+        ),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(32)
+    ])
 
-    print(rb.mini_batch(50))
+def create_dnn():
+    return tf.keras.models.Sequential([
+        tf.keras.layers.Dense(16, input_dim = 2, activation = "relu"),
+        tf.keras.layers.Dense(8, activation = "relu")
+    ])
+
+def create_nn():
+    cnn = create_cnn()
+    dnn = create_dnn()
+        
+    input = tf.keras.layers.concatenate([cnn.output, dnn.output])
+    x = tf.keras.layers.Dense(16, activation = "relu")(input)
+    output = tf.keras.layers.Dense(8, activation = "softmax")(x)
+
+    return tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
+
+def main():
+    nn = create_nn()
+    env = PathPlanningEnv("grid1.bmp", DIM)
+    rb = ReplayBuffer(50, [(11, 11), 2])
+    state = env.reset(np.array([10, 10]), np.array([3, 3]))
+    for i in range(0, 500):
+        print(state)
+        prediction = nn.predict(state)
+        action = np.argmax(prediction)
+        next_state, reward, terminal = env.step(action)
+        rb.add(state, action, reward, terminal, next_state)
+        state = next_state
 
 if __name__=='__main__':
     main()
