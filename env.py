@@ -74,5 +74,5 @@ class PathPlanningEnv:
                     if x >= 0 and x < self.grid_width:
                         state[dy+dim, dx+dim] = self.grid[y, x]
 
-        return state, self.pos
+        return state, (self.goal - self.pos)
                 

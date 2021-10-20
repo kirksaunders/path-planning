@@ -24,7 +24,7 @@ class ReplayBuffer:
         self.terminal = np.empty(capacity, dtype=bool)
         self.next_state_arrays = copy.deepcopy(self.state_arrays)
 
-    def add(self, states, action, reward, next_states, terminal):
+    def add(self, states, action, reward, terminal, next_states):
         assert(type(states) is list)
         assert(type(next_states) is list)
         assert(len(states) == len(self.state_arrays))
@@ -58,7 +58,7 @@ class ReplayBuffer:
         next_state_arrays = copy.deepcopy(state_arrays)
 
         # Select samples
-        selected = np.random.choice(self.size, size)
+        selected = np.random.choice(self.size, size, replace=False)
         for i in range(0, len(selected)):
             for j in range(0, len(state_arrays)):
                 state_arrays[j][i] = self.state_arrays[j][selected[i]]
@@ -70,15 +70,16 @@ class ReplayBuffer:
         return state_arrays, actions, rewards, terminal, next_state_arrays
 
 def main():
-    rb = ReplayBuffer(50, [(128, 64, 3), (2)])
+    env = PathPlanningEnv("grid1.bmp")
+    rb = ReplayBuffer(50, [(11, 11), 2])
+    states = env.reset(np.array([10, 10]), np.array([3, 3]))
+    for i in range(0, 500):
+        action = np.random.choice(env.num_actions)
+        next_states, reward, terminal = env.step(action)
+        rb.add(list(states), action, reward, terminal, list(next_states))
+        states = next_states
 
-    #env = PathPlanningEnv("grid1.bmp")
-    #state = env.reset((10, 10), (3, 3))
-    #while True:
-        #print(state)
-        #action = int(input())
-        #state, reward, terminal = env.step(action)
-        #print(reward, terminal)
+    print(rb.mini_batch(50))
 
 if __name__=='__main__':
     main()
