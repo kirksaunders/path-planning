@@ -7,7 +7,7 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 
-DIM = 5
+DIM = 3
 
 class ReplayBuffer:
     def __init__(self, capacity, state_shapes):
@@ -108,7 +108,7 @@ class ReplayBufferNew:
 def create_cnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
-            filters = 8,
+            filters = 4,
             kernel_size = 4,
             strides = 1,
             activation = 'relu',
@@ -120,7 +120,7 @@ def create_cnn():
             padding = "same"
         ),
         tf.keras.layers.Conv2D(
-            filters = 16,
+            filters = 8,
             kernel_size = 4,
             strides = 1,
             activation = 'relu',
@@ -131,7 +131,7 @@ def create_cnn():
             padding = "same"
         ),
         tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(32)
+        tf.keras.layers.Dense(32, activation = "relu")
     ])
 
 def create_dnn():
@@ -151,7 +151,7 @@ def create_nn():
     model = tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(0.001)
+        optimizer = tf.keras.optimizers.Adam(0.003)
     )
 
     return model
@@ -193,9 +193,17 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
 
     iteration = 0
     episodes = 0
-    total_rewards = [None] * 25
+    total_rewards = [None] * 100
     while True:
-        state = env.reset(random=True)
+        epsilon = epsilon*0.9995
+        q.optimizer.learning_rate = q.optimizer.learning_rate*0.9995
+        #state = env.reset(random=True)
+        if episodes % 3 == 0:
+            state = env.reset(np.array([13, 1]), np.array([16, 12]))
+        elif episodes % 3 == 1:
+            state = env.reset(np.array([4, 3]), np.array([11, 17]))
+        elif episodes % 3 == 2:
+            state = env.reset(np.array([19, 10]), np.array([1, 10]))
         total_reward = 0.0
         for t in range(0, episode_step_limit):
             iteration += 1
@@ -221,18 +229,24 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
             if terminal:
                 break
         
-        total_rewards[episodes % 25] = total_reward
+        total_rewards[episodes % 100] = total_reward
         episodes += 1
 
         if episodes % 100 == 0:
             r = 0.0
             c = 0
-            for i in range(0, min(25, episodes)):
+            for i in range(0, min(100, episodes)):
                 r += total_rewards[i]
                 c += 1
-            print("Episode {}, episode reward: {}, average reward: {}".format(episodes, total_reward, r / c))
+            print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(episodes, q.optimizer.learning_rate.numpy(), epsilon, total_reward, r / c))
 
-            state = env.reset(random=True)
+            #state = env.reset(random=True)
+            if episodes % 3 == 0:
+                state = env.reset(np.array([13, 1]), np.array([16, 12]))
+            elif episodes % 3 == 1:
+                state = env.reset(np.array([4, 3]), np.array([11, 17]))
+            elif episodes % 3 == 2:
+                state = env.reset(np.array([19, 10]), np.array([1, 10]))
             for t in range(0, episode_step_limit):
                 action = np.argmax(q(state_to_tf_input(state)))
                 next_state, reward, terminal = env.step(action)
@@ -243,8 +257,8 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
 
 def main():
     model = create_nn()
-    env = PathPlanningEnv("grid_empty.bmp", DIM)
-    dqn(env, model, 0.999, 0.25, 50, 65536, 64, 32)
+    env = PathPlanningEnv("grid1.bmp", DIM)
+    dqn(env, model, 0.999, 0.5, 50, 65536, 64, 32)
 
 if __name__=='__main__':
     main()

@@ -76,6 +76,8 @@ class PathPlanningEnv:
 
         reward = -np.linalg.norm(self.goal - self.pos)
         terminal = reward == 0
+        if terminal:
+            reward += 100
         if result == False:
             reward -= 100
 
