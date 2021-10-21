@@ -33,7 +33,7 @@ class PathPlanningEnv:
         else:
             self.pos = start
             self.goal = goal
-            
+
         return self.get_state()
 
     def move(self, dir):
@@ -87,5 +87,26 @@ class PathPlanningEnv:
                     if x >= 0 and x < self.grid_width:
                         state[dy+self.dim, dx+self.dim, 0] = self.grid[y, x]
 
-        return [state, (self.goal - self.pos)]
-                
+        #return [state, (self.goal - self.pos)]
+        dir = self.goal - self.pos
+        norm = np.linalg.norm(dir)
+        if norm == 0:
+            norm = 1
+        dir = dir / norm
+
+        return [dir]
+    
+    def display(self):
+        for y in range(0, self.grid_height):
+            for x in range(0, self.grid_width):
+                if x == self.pos[0] and y == self.pos[1]:
+                    print("P", end="")
+                elif x == self.goal[0] and y == self.goal[1]:
+                    print("G", end="")
+                elif self.grid[y, x] == 1:
+                    print("X", end="")
+                else:
+                    print("O", end="")
+            print("")
+        print("")
+        print("")
