@@ -168,21 +168,7 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
 
             if replay_buffer.size >= batch_size:
                 states, actions, rewards, terminals, next_states = replay_buffer.mini_batch(batch_size)
-                """ actions_one_hot = tf.keras.utils.to_categorical(actions, env.num_actions, dtype=np.float32)
-                q_target_max = q_target.predict(next_states).max(axis=1)
-
-                q_target_values = rewards + np.multiply(q_target_max, np.invert(terminals)) * gamma
-
-                with tf.GradientTape() as tape:
-                    q_values = tf.reduce_sum(tf.multiply(q(states), actions_one_hot), axis=1)
-                    loss = tf.reduce_mean(tf.square(q_target_values - q_values))
-
-                gradients = tape.gradient(loss, q.trainable_variables)
-                q.optimizer.apply_gradients(zip(gradients, q.trainable_variables)) """
-
                 train_step(env, q, q_target, gamma, states, actions, rewards, terminals, next_states)
-
-                #print("Iteration {} complete with loss {}".format(iteration, loss))
 
             state = next_state
 

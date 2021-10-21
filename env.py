@@ -15,6 +15,7 @@ class PathPlanningEnv:
 
         self.pos = np.array([0, 0])
         self.goal = np.array([0, 0])
+        self.path = np.zeros((self.grid_width, self.grid_height), dtype=bool)
 
         self.num_actions = 8
         self.dim = dim
@@ -34,6 +35,8 @@ class PathPlanningEnv:
             self.pos = start
             self.goal = goal
 
+        self.path = np.zeros((self.grid_width, self.grid_height), dtype=bool)
+
         return self.get_state()
 
     def move(self, dir):
@@ -46,6 +49,7 @@ class PathPlanningEnv:
            ):
             return False
         else:
+            self.path[self.pos[1], self.pos[0]] = True
             self.pos = new_pos
             return True
 
@@ -87,14 +91,13 @@ class PathPlanningEnv:
                     if x >= 0 and x < self.grid_width:
                         state[dy+self.dim, dx+self.dim, 0] = self.grid[y, x]
 
-        #return [state, (self.goal - self.pos)]
         dir = self.goal - self.pos
         norm = np.linalg.norm(dir)
         if norm == 0:
             norm = 1
         dir = dir / norm
 
-        return [dir]
+        return [state, dir]
     
     def display(self):
         for y in range(0, self.grid_height):
@@ -104,9 +107,11 @@ class PathPlanningEnv:
                 elif x == self.goal[0] and y == self.goal[1]:
                     print("G", end="")
                 elif self.grid[y, x] == 1:
+                    print("W", end="")
+                elif self.path[y, x] == 1:
                     print("X", end="")
                 else:
-                    print("O", end="")
+                    print("+", end="")
             print("")
         print("")
         print("")

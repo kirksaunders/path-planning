@@ -1,11 +1,13 @@
 import copy
+from collections import namedtuple
 from env import PathPlanningEnv
 import numpy as np
+import random
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 
-DIM = 2
+DIM = 5
 
 class ReplayBuffer:
     def __init__(self, capacity, state_shapes):
@@ -74,6 +76,35 @@ class ReplayBuffer:
 
         return state_arrays, actions, rewards, terminal, next_state_arrays
 
+class ReplayBufferNew:
+    def __init__(self, capacity):
+        self.data = [None] * capacity
+        self.capacity = capacity
+        self.size = 0
+        self.index = 0
+        self.tuple = namedtuple("Experience", ["states", "actions", "rewards", "terminals", "next_states"])
+
+    def add(self, experience):
+        self.data[self.index] = experience
+        self.index += 1
+        if self.index >= self.capacity:
+            self.index = 0
+
+        if self.size < self.capacity:
+            self.size += 1
+
+    def mini_batch(self, size):
+        data = random.sample(self.data[0:self.size], size)
+        data = self.tuple(*zip(*data))
+
+        states = [None] * len(data[0][0])
+        next_states = [None] * len(data[0][0])
+        for i in range(0, len(states)):
+            states[i] = np.asarray([x[i] for x in data[0]], dtype=np.float32)
+            next_states[i] = np.asarray([x[i] for x in data[4]], dtype=np.float32)
+
+        return states, np.asarray(data[1], dtype=np.int32), np.asarray(data[2], dtype=np.float32), np.asarray(data[3], dtype=bool), next_states
+
 def create_cnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
@@ -114,13 +145,13 @@ def create_nn():
     dnn = create_dnn()
         
     input = tf.keras.layers.concatenate([cnn.output, dnn.output])
-    x = tf.keras.layers.Dense(16, activation = "relu")(input)
-    output = tf.keras.layers.Dense(8, activation = "softmax")(x)
+    x = tf.keras.layers.Dense(32, activation = "relu")(input)
+    output = tf.keras.layers.Dense(8, activation = "linear")(x)
 
     model = tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(0.0001)
+        optimizer = tf.keras.optimizers.Adam(0.001)
     )
 
     return model
@@ -140,55 +171,47 @@ def model_input_shape(nn):
 
     return shapes
 
+@tf.function
+def train_step(env, q, q_target, gamma, states, actions, rewards, terminals, next_states):
+    actions_one_hot = tf.one_hot(actions, env.num_actions)
+    q_target_max = tf.reduce_max(q_target(next_states), axis=1)
+
+    q_target_values = rewards + tf.multiply(q_target_max, 1.0 - tf.cast(terminals, tf.float32)) * gamma
+
+    with tf.GradientTape() as tape:
+        q_values = tf.reduce_sum(tf.multiply(q(states), actions_one_hot), axis=1)
+        loss = tf.reduce_mean(tf.square(q_target_values - q_values))
+
+    gradients = tape.gradient(loss, q.trainable_variables)
+    q.optimizer.apply_gradients(zip(gradients, q.trainable_variables))
+
 def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, copy_interval):
-    replay_buffer = ReplayBuffer(replay_size, model_input_shape(q))
+    #replay_buffer = ReplayBuffer(replay_size, model_input_shape(q))
+    replay_buffer = ReplayBufferNew(replay_size)
     q_target = tf.keras.models.clone_model(q)
     q_target.set_weights(q.get_weights())
 
     iteration = 0
-    counter = 0
+    episodes = 0
+    total_rewards = [None] * 25
     while True:
-        counter += 1
-        if counter % 10 == 0:
-            state = env.reset(random=True)
-            total_reward = 0
-            for t in range(0, episode_step_limit):
-                env.display()
-                action = q.predict(state_to_tf_input(state)).argmax()
-                print(state, action)
-                state, reward, terminal = env.step(action)
-                total_reward += reward
-                if terminal:
-                    break
-            print("Total reward: {}".format(total_reward))
-
         state = env.reset(random=True)
+        total_reward = 0.0
         for t in range(0, episode_step_limit):
             iteration += 1
             if np.random.random() > epsilon:
-                action = q.predict(state_to_tf_input(state)).argmax()
+                action = np.argmax(q(state_to_tf_input(state)))
             else:
                 action = np.random.choice(env.num_actions)
 
             next_state, reward, terminal = env.step(action)
-            replay_buffer.add(state, action, reward, terminal, next_state)
+            total_reward += reward
+            #replay_buffer.add(state, action, reward, terminal, next_state)
+            replay_buffer.add((state, action, reward, terminal, next_state))
 
             if replay_buffer.size >= batch_size:
-                states, actions, rewards, terminals, next_states = replay_buffer.mini_batch(min(iteration, batch_size))
-                actions_one_hot = tf.keras.utils.to_categorical(actions, env.num_actions, dtype=np.float32)
-                q_target_max = q_target.predict(next_states).max(axis=1)
-
-                q_target_values = rewards + np.multiply(q_target_max, np.invert(terminals)) * gamma
-
-                with tf.GradientTape() as tape:
-                    q_values = tf.reduce_sum(tf.multiply(q(states), actions_one_hot), axis=1)
-                    loss = tf.reduce_mean(tf.square(q_target_values - q_values))
-                    #loss = tf.keras.losses.Huber()(q_target_values, q_values)
-
-                gradients = tape.gradient(loss, q.trainable_variables)
-                q.optimizer.apply_gradients(zip(gradients, q.trainable_variables))
-
-                print("Iteration {} complete with loss {}".format(iteration, loss))
+                states, actions, rewards, terminals, next_states = replay_buffer.mini_batch(batch_size)
+                train_step(env, q, q_target, gamma, states, actions, rewards, terminals, next_states)
 
             state = next_state
 
@@ -197,18 +220,31 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
 
             if terminal:
                 break
+        
+        total_rewards[episodes % 25] = total_reward
+        episodes += 1
+
+        if episodes % 100 == 0:
+            r = 0.0
+            c = 0
+            for i in range(0, min(25, episodes)):
+                r += total_rewards[i]
+                c += 1
+            print("Episode {}, episode reward: {}, average reward: {}".format(episodes, total_reward, r / c))
+
+            state = env.reset(random=True)
+            for t in range(0, episode_step_limit):
+                action = np.argmax(q(state_to_tf_input(state)))
+                next_state, reward, terminal = env.step(action)
+                if terminal:
+                    break
+                state = next_state
+            env.display()
 
 def main():
-    #model = create_nn()
-    model = tf.keras.models.Sequential([
-        tf.keras.layers.Dense(16, input_dim = 2, activation = "relu"),
-        tf.keras.layers.Dense(8, activation = "softmax")
-    ])
-    model.compile(
-        optimizer = tf.keras.optimizers.Adam(0.02)
-    )
-    env = PathPlanningEnv("grid_empty_small.bmp", DIM)
-    dqn(env, model, 0.999, 0.25, 20, 512, 256, 100)
+    model = create_nn()
+    env = PathPlanningEnv("grid_empty.bmp", DIM)
+    dqn(env, model, 0.999, 0.25, 50, 65536, 64, 32)
 
 if __name__=='__main__':
     main()
