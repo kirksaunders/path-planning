@@ -132,13 +132,13 @@ def create_cnn():
         ),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(32, activation = "tanh"),
-        tf.keras.layers.Dense(8, activation = "relu")
+        #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
 def create_dnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Dense(16, input_dim = 2, activation = "tanh"),
-        tf.keras.layers.Dense(8, activation = "relu")
+        #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
 def create_nn():
@@ -152,7 +152,7 @@ def create_nn():
     model = tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(0.003)
+        optimizer = tf.keras.optimizers.Adam(0.0015)
     )
 
     return model

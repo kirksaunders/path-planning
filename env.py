@@ -55,6 +55,8 @@ class PathPlanningEnv:
 
 
     def step(self, action):
+        old_pos = self.pos
+
         if action == 0: # up
             result = self.move(np.array([0, -1]))
         elif action == 1: # up right
@@ -75,7 +77,7 @@ class PathPlanningEnv:
             raise ValueError("Invalid action taken: " + str(action))
 
         reward = -np.linalg.norm(self.goal - self.pos)
-        terminal = reward == 0
+        terminal = np.array_equal(self.goal, self.pos)
         if terminal:
             reward += 500
         if result == False:
