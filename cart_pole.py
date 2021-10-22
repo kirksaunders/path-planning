@@ -152,6 +152,8 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
     episodes = 0
     total_rewards = [None] * 25
     while True:
+        epsilon = epsilon*0.995
+        q.optimizer.learning_rate = q.optimizer.learning_rate*0.995
         state = env.reset(random=True)
         total_reward = 0.0
         for t in range(0, episode_step_limit):

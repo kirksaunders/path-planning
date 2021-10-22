@@ -7,7 +7,7 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 
-DIM = 3
+DIM = 4
 
 class ReplayBuffer:
     def __init__(self, capacity, state_shapes):
@@ -109,9 +109,9 @@ def create_cnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
             filters = 4,
-            kernel_size = 4,
+            kernel_size = 3,
             strides = 1,
-            activation = 'relu',
+            activation = "relu",
             padding = "same",
             input_shape = (2*DIM+1, 2*DIM+1, 1)
         ),
@@ -121,9 +121,9 @@ def create_cnn():
         ),
         tf.keras.layers.Conv2D(
             filters = 8,
-            kernel_size = 4,
+            kernel_size = 3,
             strides = 1,
-            activation = 'relu',
+            activation = "relu",
             padding = "same",
         ),
         tf.keras.layers.MaxPooling2D(
@@ -131,12 +131,13 @@ def create_cnn():
             padding = "same"
         ),
         tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(32, activation = "relu")
+        tf.keras.layers.Dense(32, activation = "tanh"),
+        tf.keras.layers.Dense(8, activation = "relu")
     ])
 
 def create_dnn():
     return tf.keras.models.Sequential([
-        tf.keras.layers.Dense(16, input_dim = 2, activation = "relu"),
+        tf.keras.layers.Dense(16, input_dim = 2, activation = "tanh"),
         tf.keras.layers.Dense(8, activation = "relu")
     ])
 
@@ -174,12 +175,12 @@ def model_input_shape(nn):
 @tf.function
 def train_step(env, q, q_target, gamma, states, actions, rewards, terminals, next_states):
     actions_one_hot = tf.one_hot(actions, env.num_actions)
-    q_target_max = tf.reduce_max(q_target(next_states), axis=1)
+    q_target_max = tf.reduce_max(q_target(next_states, training=True), axis=1)
 
     q_target_values = rewards + tf.multiply(q_target_max, 1.0 - tf.cast(terminals, tf.float32)) * gamma
 
     with tf.GradientTape() as tape:
-        q_values = tf.reduce_sum(tf.multiply(q(states), actions_one_hot), axis=1)
+        q_values = tf.reduce_sum(tf.multiply(q(states, training=True), actions_one_hot), axis=1)
         loss = tf.reduce_mean(tf.square(q_target_values - q_values))
 
     gradients = tape.gradient(loss, q.trainable_variables)
@@ -197,13 +198,13 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
     while True:
         epsilon = epsilon*0.9995
         q.optimizer.learning_rate = q.optimizer.learning_rate*0.9995
-        #state = env.reset(random=True)
-        if episodes % 3 == 0:
+        state = env.reset(random=True)
+        """ if episodes % 3 == 0:
             state = env.reset(np.array([13, 1]), np.array([16, 12]))
         elif episodes % 3 == 1:
             state = env.reset(np.array([4, 3]), np.array([11, 17]))
         elif episodes % 3 == 2:
-            state = env.reset(np.array([19, 10]), np.array([1, 10]))
+            state = env.reset(np.array([19, 10]), np.array([1, 10])) """
         total_reward = 0.0
         for t in range(0, episode_step_limit):
             iteration += 1
@@ -241,14 +242,18 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
             print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(episodes, q.optimizer.learning_rate.numpy(), epsilon, total_reward, r / c))
 
             #state = env.reset(random=True)
-            if episodes % 3 == 0:
+            state = env.reset(
+                np.array([np.random.choice(20), np.random.choice(8)]),
+                np.array([np.random.choice(20), np.random.choice(8) + 11])
+            )
+            """ if episodes % 3 == 0:
                 state = env.reset(np.array([13, 1]), np.array([16, 12]))
             elif episodes % 3 == 1:
                 state = env.reset(np.array([4, 3]), np.array([11, 17]))
             elif episodes % 3 == 2:
-                state = env.reset(np.array([19, 10]), np.array([1, 10]))
+                state = env.reset(np.array([19, 10]), np.array([1, 10])) """
             for t in range(0, episode_step_limit):
-                action = np.argmax(q(state_to_tf_input(state)))
+                action = np.argmax(q(state_to_tf_input(state), training=False))
                 next_state, reward, terminal = env.step(action)
                 if terminal:
                     break
@@ -257,7 +262,7 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
 
 def main():
     model = create_nn()
-    env = PathPlanningEnv("grid1.bmp", DIM)
+    env = PathPlanningEnv("grid_single_wall.bmp", DIM)
     dqn(env, model, 0.999, 0.5, 50, 65536, 64, 32)
 
 if __name__=='__main__':
