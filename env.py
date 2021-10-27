@@ -1,5 +1,5 @@
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 class PathPlanningEnv:
     def __init__(self, map, dim):
@@ -9,15 +9,17 @@ class PathPlanningEnv:
         data = img.getdata()
         self.grid_width = width
         self.grid_height = height
-        self.grid = np.array(data).reshape((width, height, len(img.getbands())))
+        self.grid = np.array(data).reshape((height, width, len(img.getbands())))
         self.grid = self.grid[:, :, 1] # use only first channel
         self.grid = 1 - np.sign(self.grid)
 
         self.pos = np.array([0, 0])
+        self.start = np.array([0, 0])
         self.goal = np.array([0, 0])
-        self.path = np.zeros((self.grid_width, self.grid_height), dtype=bool)
+        self.path = np.zeros((self.grid_height, self.grid_width), dtype=bool)
 
         self.num_actions = 8
+        self.draw_size = 25
         self.dim = dim
 
     def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=False):
@@ -35,7 +37,8 @@ class PathPlanningEnv:
             self.pos = start
             self.goal = goal
 
-        self.path = np.zeros((self.grid_width, self.grid_height), dtype=bool)
+        self.start = self.pos
+        self.path = np.zeros((self.grid_height, self.grid_width), dtype=bool)
 
         return self.get_state()
 
@@ -102,6 +105,34 @@ class PathPlanningEnv:
         dir = dir / norm
 
         return [state, dir]
+
+    def draw(self, out_file="results/out.png"):
+        with Image.new(mode="RGB", size=(self.grid_width*self.draw_size, self.grid_height*self.draw_size)) as img:
+            draw = ImageDraw.Draw(img)
+            
+            for y in range(0, self.grid_height):
+                for x in range(0, self.grid_width):
+                    if x == self.goal[0] and y == self.goal[1]:
+                        color = (0, 255, 0)
+                    elif x == self.start[0] and y == self.start[1]:
+                        color = (255, 0, 0)
+                    elif x == self.pos[0] and y == self.pos[1]:
+                        color = (225, 100, 25)
+                    elif self.grid[y, x] == 1:
+                        color = (50, 50, 50)
+                    elif self.path[y, x] == 1:
+                        color = (150, 150, 255)
+                    else:
+                        color = (225, 225, 225)
+
+                    draw.rectangle(
+                        xy=[(x*self.draw_size, y*self.draw_size), ((x+1)*self.draw_size, (y+1)*self.draw_size)],
+                        outline=(0, 0, 0),
+                        fill=color
+                    )
+            
+            img.save(out_file)
+
     
     def display(self):
         for y in range(0, self.grid_height):

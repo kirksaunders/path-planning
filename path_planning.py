@@ -230,6 +230,9 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
             if terminal:
                 break
         
+        env.draw()
+        exit(0)
+
         total_rewards[episodes % 100] = total_reward
         episodes += 1
 
