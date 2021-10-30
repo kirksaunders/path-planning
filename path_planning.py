@@ -141,7 +141,7 @@ def create_dnn():
         #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
-def create_nn():
+def create_nn(lr):
     cnn = create_cnn()
     dnn = create_dnn()
         
@@ -152,7 +152,7 @@ def create_nn():
     model = tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(0.0015)
+        optimizer = tf.keras.optimizers.Adam(lr)
     )
 
     return model
@@ -186,6 +186,22 @@ def train_step(env, q, q_target, gamma, states, actions, rewards, terminals, nex
     gradients = tape.gradient(loss, q.trainable_variables)
     q.optimizer.apply_gradients(zip(gradients, q.trainable_variables))
 
+@tf.function
+def train_step_double(env, q, q_target, gamma, states, actions, rewards, terminals, next_states):
+    actions_one_hot = tf.one_hot(actions, env.num_actions)
+    q_target_argmax = tf.argmax(q_target(next_states, training=True), axis=1)
+    q_target_actions = tf.one_hot(q_target_argmax, env.num_actions)
+    q_next_values = tf.reduce_sum(tf.multiply(q(next_states, training=True), q_target_actions), axis=1)
+
+    q_target_values = rewards + tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32)) * gamma
+
+    with tf.GradientTape() as tape:
+        q_values = tf.reduce_sum(tf.multiply(q(states, training=True), actions_one_hot), axis=1)
+        loss = tf.reduce_mean(tf.square(q_target_values - q_values))
+
+    gradients = tape.gradient(loss, q.trainable_variables)
+    q.optimizer.apply_gradients(zip(gradients, q.trainable_variables))
+
 def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, copy_interval):
     #replay_buffer = ReplayBuffer(replay_size, model_input_shape(q))
     replay_buffer = ReplayBufferNew(replay_size)
@@ -196,8 +212,6 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
     episodes = 0
     total_rewards = [None] * 100
     while True:
-        epsilon = epsilon*0.9995
-        q.optimizer.learning_rate = q.optimizer.learning_rate*0.9995
         state = env.reset(random=True)
         """ if episodes % 3 == 0:
             state = env.reset(np.array([13, 1]), np.array([16, 12]))
@@ -208,7 +222,7 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
         total_reward = 0.0
         for t in range(0, episode_step_limit):
             iteration += 1
-            if np.random.random() > epsilon:
+            if np.random.random() > epsilon(iteration):
                 action = np.argmax(q(state_to_tf_input(state)))
             else:
                 action = np.random.choice(env.num_actions)
@@ -220,7 +234,7 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
 
             if replay_buffer.size >= batch_size:
                 states, actions, rewards, terminals, next_states = replay_buffer.mini_batch(batch_size)
-                train_step(env, q, q_target, gamma, states, actions, rewards, terminals, next_states)
+                train_step_double(env, q, q_target, gamma, states, actions, rewards, terminals, next_states)
 
             state = next_state
 
@@ -229,9 +243,6 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
 
             if terminal:
                 break
-        
-        env.draw()
-        exit(0)
 
         total_rewards[episodes % 100] = total_reward
         episodes += 1
@@ -242,7 +253,7 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
             for i in range(0, min(100, episodes)):
                 r += total_rewards[i]
                 c += 1
-            print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(episodes, q.optimizer.learning_rate.numpy(), epsilon, total_reward, r / c))
+            print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(episodes, q.optimizer.learning_rate(iteration), epsilon(iteration), total_reward, r / c))
 
             #state = env.reset(random=True)
             state = env.reset(
@@ -261,12 +272,16 @@ def dqn(env, q, gamma, epsilon, episode_step_limit, replay_size, batch_size, cop
                 if terminal:
                     break
                 state = next_state
-            env.display()
+            env.draw()
 
 def main():
-    model = create_nn()
+    max_episode_steps = 50
+    learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
+    exploration_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.5, max_episode_steps, 0.9995)
+
+    model = create_nn(learning_rate)
     env = PathPlanningEnv("grid_single_wall.bmp", DIM)
-    dqn(env, model, 0.999, 0.5, 50, 65536, 64, 32)
+    dqn(env, model, 0.999, exploration_rate, max_episode_steps, 65536, 64, 32)
 
 if __name__=='__main__':
     main()
