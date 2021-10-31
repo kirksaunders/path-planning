@@ -189,9 +189,9 @@ def train_step(env, q, q_target, gamma, states, actions, rewards, terminals, nex
 @tf.function
 def train_step_double(env, q, q_target, gamma, states, actions, rewards, terminals, next_states):
     actions_one_hot = tf.one_hot(actions, env.num_actions)
-    q_target_argmax = tf.argmax(q_target(next_states, training=True), axis=1)
-    q_target_actions = tf.one_hot(q_target_argmax, env.num_actions)
-    q_next_values = tf.reduce_sum(tf.multiply(q(next_states, training=True), q_target_actions), axis=1)
+    q_next_argmax = tf.argmax(q(next_states, training=True), axis=1)
+    q_next_actions = tf.one_hot(q_next_argmax, env.num_actions)
+    q_next_values = tf.reduce_sum(tf.multiply(q_target(next_states, training=True), q_next_actions), axis=1)
 
     q_target_values = rewards + tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32)) * gamma
 
@@ -281,7 +281,7 @@ def main():
 
     model = create_nn(learning_rate)
     env = PathPlanningEnv("grid_single_wall.bmp", DIM)
-    dqn(env, model, 0.999, exploration_rate, max_episode_steps, 65536, 64, 32)
+    dqn(env, model, 0.999, exploration_rate, max_episode_steps, 65536, 64, 128)
 
 if __name__=='__main__':
     main()
