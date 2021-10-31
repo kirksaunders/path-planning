@@ -77,7 +77,7 @@ class DDQN:
                 self.replay_buffer.add((state, action, reward, terminal, next_state))
 
                 if self.replay_buffer.size >= batch_size:
-                    states, actions, rewards, terminals, next_states = self.replay_buffer.mini_batch(batch_size)
+                    states, actions, rewards, terminals, next_states, priorities, indices = self.replay_buffer.mini_batch(batch_size)
                     self.train_step(gamma, states, actions, rewards, terminals, next_states)
 
                 state = next_state

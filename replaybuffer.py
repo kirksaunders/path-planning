@@ -77,7 +77,7 @@ class ReplayBuffer:
         self.age = 0
         self.tuple = namedtuple("Experience", ["states", "actions", "rewards", "terminals", "next_states", "priority", "age"])
 
-    def swap(self, a, b, dict_in, dict_out):
+    def swap(self, a, b, dict_in = None, dict_out = None):
         temp = self.data[a]
         self.data[a] = self.data[b]
         self.data[b] = temp
@@ -97,7 +97,7 @@ class ReplayBuffer:
                 del dict_out[b]
                 dict_out[a] = i
 
-    def siftup(self, index, dict_in, dict_out):
+    def siftup(self, index, dict_in = None, dict_out = None):
         while index > 0:
             parent = (index - 1) // 2
 
@@ -107,7 +107,7 @@ class ReplayBuffer:
             else:
                 break
 
-    def siftdown(self, index, dict_in, dict_out):
+    def siftdown(self, index, dict_in = None, dict_out = None):
         while index < self.size:
             left_child = 2*index + 1
             right_child = 2*index + 2
@@ -147,7 +147,10 @@ class ReplayBuffer:
 
     def add(self, experience):
         if self.size < self.capacity:
-            self.data[self.size] = experience + (self.data[0][5] + 1, self.age)
+            priority = 0
+            if self.size > 0:
+                priority = self.data[0][5] + 1
+            self.data[self.size] = experience + (priority, self.age)
             self.size += 1
             self.siftup(self.size - 1)
         else:
