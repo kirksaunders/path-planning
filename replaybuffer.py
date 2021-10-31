@@ -74,20 +74,104 @@ class ReplayBuffer:
         self.data = [None] * capacity
         self.capacity = capacity
         self.size = 0
-        self.index = 0
-        self.tuple = namedtuple("Experience", ["states", "actions", "rewards", "terminals", "next_states"])
+        self.age = 0
+        self.tuple = namedtuple("Experience", ["states", "actions", "rewards", "terminals", "next_states", "priority", "age"])
+
+    def swap(self, a, b, dict_in, dict_out):
+        temp = self.data[a]
+        self.data[a] = self.data[b]
+        self.data[b] = temp
+
+        if dict_in != None and dict_out != None:
+            if a in dict_out:
+                i = dict_out[a]
+                assert dict_in[i] == a
+                dict_in[i] = b
+                del dict_out[a]
+                dict_out[b] = i
+
+            if b in dict_out:
+                i = dict_out[b]
+                assert dict_in[i] == b
+                dict_in[i] = a
+                del dict_out[b]
+                dict_out[a] = i
+
+    def siftup(self, index, dict_in, dict_out):
+        while index > 0:
+            parent = (index - 1) // 2
+
+            if self.data[parent][5] < self.data[index][5]:
+                self.swap(index, parent, dict_in, dict_out)
+                index = parent
+            else:
+                break
+
+    def siftdown(self, index, dict_in, dict_out):
+        while index < self.size:
+            left_child = 2*index + 1
+            right_child = 2*index + 2
+
+            if self.data[left_child][5] > self.data[right_child][5]:
+                max_child = left_child
+            else:
+                max_child = right_child
+
+            if self.data[index][5] < self.data[max_child][5]:
+                self.swap(index, max_child, dict_in, dict_out)
+                index = max_child
+            else:
+                break
+
+    def replace(self, index, value):
+        old = self.data[index]
+        self.data[index] = value
+
+        if value[5] > old[5]:
+            self.siftup(index)
+        elif value[5] < old[5]:
+            self.siftdown(index)
+
+    def find_old(self):
+        old = 0
+        index = np.random.choice(2) + 1
+        while index < self.size:
+            if self.data[index][6] < self.data[old][6]:
+                old = index
+            index = 2*index + np.random.choice(2) + 1
+
+        return old
 
     def add(self, experience):
-        self.data[self.index] = experience
-        self.index += 1
-        if self.index >= self.capacity:
-            self.index = 0
-
         if self.size < self.capacity:
+            self.data[self.size] = experience + (self.data[0][5] + 1, self.age)
             self.size += 1
+            self.siftup(self.size - 1)
+        else:
+            old = self.find_old()
+            self.replace(old, experience + (self.data[0][5] + 1, self.age))
+
+        self.age += 1
+
+    def update(self, indices, priorities):
+        dict_in = {}
+        dict_out = {}
+        for i in indices:
+            dict_in[i] = i
+            dict_out[i] = i
+
+        for i in indices:
+            old = self.data[dict_in[i]][5]
+            self.data[dict_in[i]][5] = priorities[i]
+
+            if priorities[i] > old:
+                self.siftup(i, dict_in, dict_out)
+            elif priorities[i] < old:
+                self.siftdown(i, dict_in, dict_out)
 
     def mini_batch(self, size):
-        data = random.sample(self.data[0:self.size], size)
+        indices = np.random.choice(self.size, size, replace=False)
+        data = [self.data[i] for i in indices]
         data = self.tuple(*zip(*data))
 
         states = [None] * len(data[0][0])
@@ -96,4 +180,6 @@ class ReplayBuffer:
             states[i] = np.asarray([x[i] for x in data[0]], dtype=np.float32)
             next_states[i] = np.asarray([x[i] for x in data[4]], dtype=np.float32)
 
-        return states, np.asarray(data[1], dtype=np.int32), np.asarray(data[2], dtype=np.float32), np.asarray(data[3], dtype=bool), next_states
+        return states, np.asarray(data[1], dtype=np.int32), np.asarray(data[2], dtype=np.float32), \
+               np.asarray(data[3], dtype=bool), next_states, np.asarray(data[5], dtype=np.float32), \
+               indices
