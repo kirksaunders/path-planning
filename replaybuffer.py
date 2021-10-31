@@ -112,7 +112,10 @@ class ReplayBuffer:
             left_child = 2*index + 1
             right_child = 2*index + 2
 
-            if self.data[left_child][5] > self.data[right_child][5]:
+            if left_child >= self.size:
+                break
+
+            if right_child >= self.size or self.data[left_child][5] > self.data[right_child][5]:
                 max_child = left_child
             else:
                 max_child = right_child
@@ -153,6 +156,8 @@ class ReplayBuffer:
 
         self.age += 1
 
+        assert self.is_heap()
+
     def update(self, indices, priorities):
         dict_in = {}
         dict_out = {}
@@ -168,6 +173,21 @@ class ReplayBuffer:
                 self.siftup(i, dict_in, dict_out)
             elif priorities[i] < old:
                 self.siftdown(i, dict_in, dict_out)
+
+        assert self.is_heap()
+
+    def is_heap(self):
+        for i in range(0, self.size):
+            left_child = 2*i + 1
+            right_child = 2*i + 2
+
+            if left_child < self.size and self.data[i][5] < self.data[left_child][5]:
+                return False
+            
+            if right_child < self.size and self.data[i][5] < self.data[right_child][5]:
+                return False
+        
+        return True
 
     def mini_batch(self, size):
         indices = np.random.choice(self.size, size, replace=False)
