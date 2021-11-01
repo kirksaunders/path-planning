@@ -72,10 +72,11 @@ import random
 class ReplayBuffer:
     def __init__(self, capacity):
         self.data = [None] * capacity
+        self.heap = [None] * capacity
         self.capacity = capacity
         self.size = 0
-        self.age = 0
-        self.tuple = namedtuple("Experience", ["states", "actions", "rewards", "terminals", "next_states", "priority", "age"])
+        self.index = 0
+        self.tuple = namedtuple("Experience", ["states", "actions", "rewards", "terminals", "next_states", "priority"])
 
     def swap(self, a, b, dict_in = None, dict_out = None):
         temp = self.data[a]
@@ -85,14 +86,12 @@ class ReplayBuffer:
         if dict_in != None and dict_out != None:
             if a in dict_out:
                 i = dict_out[a]
-                assert dict_in[i] == a
                 dict_in[i] = b
                 del dict_out[a]
                 dict_out[b] = i
 
             if b in dict_out:
                 i = dict_out[b]
-                assert dict_in[i] == b
                 dict_in[i] = a
                 del dict_out[b]
                 dict_out[a] = i
@@ -159,7 +158,7 @@ class ReplayBuffer:
 
         self.age += 1
 
-        assert self.is_heap()
+        #assert self.is_heap()
 
     def update(self, indices, priorities):
         dict_in = {}
@@ -168,16 +167,17 @@ class ReplayBuffer:
             dict_in[i] = i
             dict_out[i] = i
 
-        for i in indices:
-            old = self.data[dict_in[i]][5]
-            self.data[dict_in[i]][5] = priorities[i]
+        for (i, priority) in zip(indices, priorities):
+            old = self.data[dict_in[i]]
+            new = (old[0], old[1], old[2], old[3], old[4], priority, old[6])
+            self.data[dict_in[i]] = new
 
-            if priorities[i] > old:
-                self.siftup(i, dict_in, dict_out)
-            elif priorities[i] < old:
-                self.siftdown(i, dict_in, dict_out)
+            if priority > old[5]:
+                self.siftup(dict_in[i], dict_in, dict_out)
+            elif priority < old[5]:
+                self.siftdown(dict_in[i], dict_in, dict_out)
 
-        assert self.is_heap()
+        #assert self.is_heap()
 
     def is_heap(self):
         for i in range(0, self.size):

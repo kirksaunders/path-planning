@@ -45,7 +45,7 @@ class DDQN:
         self.episodes = 0
     
     @tf.function
-    def train_step(self, gamma, states, actions, rewards, terminals, next_states):
+    def train_step(self, gamma, states, actions, rewards, terminals, next_states, priorities):
         actions_one_hot = tf.one_hot(actions, self.env.num_actions)
         q_next_argmax = tf.argmax(self.q(next_states, training=True), axis=1)
         q_next_actions = tf.one_hot(q_next_argmax, self.env.num_actions)
@@ -55,10 +55,13 @@ class DDQN:
 
         with tf.GradientTape() as tape:
             q_values = tf.reduce_sum(tf.multiply(self.q(states, training=True), actions_one_hot), axis=1)
-            loss = tf.reduce_mean(tf.square(q_target_values - q_values))
+            td_error = q_target_values - q_values
+            loss = tf.reduce_mean(tf.square(td_error))
 
         gradients = tape.gradient(loss, self.q.trainable_variables)
         self.q.optimizer.apply_gradients(zip(gradients, self.q.trainable_variables))
+
+        return tf.abs(td_error)
 
     def train(self, gamma, epsilon, episode_step_limit, batch_size, copy_interval):
         total_rewards = [None] * 100
@@ -78,7 +81,8 @@ class DDQN:
 
                 if self.replay_buffer.size >= batch_size:
                     states, actions, rewards, terminals, next_states, priorities, indices = self.replay_buffer.mini_batch(batch_size)
-                    self.train_step(gamma, states, actions, rewards, terminals, next_states)
+                    updated_priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, priorities)
+                    self.replay_buffer.update(indices, updated_priorities)
 
                 state = next_state
 
