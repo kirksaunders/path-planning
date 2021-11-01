@@ -75,38 +75,27 @@ class ReplayBuffer:
         self.heap = [None] * capacity
         self.capacity = capacity
         self.size = 0
-        self.index = 0
-        self.tuple = namedtuple("Experience", ["states", "actions", "rewards", "terminals", "next_states", "priority"])
+        self.next = 0
 
-    def swap(self, a, b, dict_in = None, dict_out = None):
+    def swap(self, a, b):
         temp = self.data[a]
         self.data[a] = self.data[b]
         self.data[b] = temp
 
-        if dict_in != None and dict_out != None:
-            if a in dict_out:
-                i = dict_out[a]
-                dict_in[i] = b
-                del dict_out[a]
-                dict_out[b] = i
+        self.data[a][6] = b
+        self.data[b][6] = a
 
-            if b in dict_out:
-                i = dict_out[b]
-                dict_in[i] = a
-                del dict_out[b]
-                dict_out[a] = i
-
-    def siftup(self, index, dict_in = None, dict_out = None):
+    def siftup(self, index):
         while index > 0:
             parent = (index - 1) // 2
 
-            if self.data[parent][5] < self.data[index][5]:
-                self.swap(index, parent, dict_in, dict_out)
+            if self.data[self.heap[parent]][5] < self.data[self.heap[index]][5]:
+                self.swap(index, parent)
                 index = parent
             else:
                 break
 
-    def siftdown(self, index, dict_in = None, dict_out = None):
+    def siftdown(self, index):
         while index < self.size:
             left_child = 2*index + 1
             right_child = 2*index + 2
@@ -114,95 +103,82 @@ class ReplayBuffer:
             if left_child >= self.size:
                 break
 
-            if right_child >= self.size or self.data[left_child][5] > self.data[right_child][5]:
+            if right_child >= self.size or self.data[self.heap[left_child]][5] > self.data[self.heap[right_child]][5]:
                 max_child = left_child
             else:
                 max_child = right_child
 
-            if self.data[index][5] < self.data[max_child][5]:
-                self.swap(index, max_child, dict_in, dict_out)
+            if self.data[self.heap[index]][5] < self.data[self.heap[max_child]][5]:
+                self.swap(index, max_child)
                 index = max_child
             else:
                 break
 
-    def replace(self, index, value):
-        old = self.data[index]
-        self.data[index] = value
-
-        if value[5] > old[5]:
-            self.siftup(index)
-        elif value[5] < old[5]:
-            self.siftdown(index)
-
-    def find_old(self):
-        old = 0
-        index = np.random.choice(2) + 1
-        while index < self.size:
-            if self.data[index][6] < self.data[old][6]:
-                old = index
-            index = 2*index + np.random.choice(2) + 1
-
-        return old
-
     def add(self, experience):
+        priority = 0
+        if self.size > 0:
+            priority = self.data[self.heap[0]][5] + 1
+
         if self.size < self.capacity:
-            priority = 0
-            if self.size > 0:
-                priority = self.data[0][5] + 1
-            self.data[self.size] = experience + (priority, self.age)
+            self.data[self.next] = experience + [priority, self.next]
+            self.heap[self.next] = self.next
             self.size += 1
-            self.siftup(self.size - 1)
+
+            self.siftup(self.next)
         else:
-            old = self.find_old()
-            self.replace(old, experience + (self.data[0][5] + 1, self.age))
+            old = self.data[self.next][5]
+            self.data[self.next] = experience + [priority, self.data[self.next][6]]
+            self.heap[self.next] = self.next
+            
+            if priority > old:
+                self.siftup(self.next)
+            elif priority < old:
+                self.siftdown(self.next)
 
-        self.age += 1
+        self.next = (self.next + 1) % self.capacity
 
-        #assert self.is_heap()
+        assert self.is_heap()
 
     def update(self, indices, priorities):
-        dict_in = {}
-        dict_out = {}
-        for i in indices:
-            dict_in[i] = i
-            dict_out[i] = i
+        for (index, priority) in zip(indices, priorities):
+            old = self.data[index][5]
+            self.data[index][5] = priority
 
-        for (i, priority) in zip(indices, priorities):
-            old = self.data[dict_in[i]]
-            new = (old[0], old[1], old[2], old[3], old[4], priority, old[6])
-            self.data[dict_in[i]] = new
+            if priority > old:
+                self.siftup(index)
+            elif priority < old:
+                self.siftdown(index)
 
-            if priority > old[5]:
-                self.siftup(dict_in[i], dict_in, dict_out)
-            elif priority < old[5]:
-                self.siftdown(dict_in[i], dict_in, dict_out)
-
-        #assert self.is_heap()
+        assert self.is_heap()
 
     def is_heap(self):
         for i in range(0, self.size):
             left_child = 2*i + 1
             right_child = 2*i + 2
 
-            if left_child < self.size and self.data[i][5] < self.data[left_child][5]:
+            if left_child < self.size and self.data[self.heap[i]][5] < self.data[self.heap[left_child]][5]:
                 return False
             
-            if right_child < self.size and self.data[i][5] < self.data[right_child][5]:
+            if right_child < self.size and self.data[self.heap[i]][5] < self.data[self.heap[right_child]][5]:
                 return False
         
         return True
 
     def mini_batch(self, size):
-        indices = np.random.choice(self.size, size, replace=False)
+        chosen = np.random.choice(self.size, size, replace=False)
+        indices = [self.heap[i] for i in chosen]
         data = [self.data[i] for i in indices]
-        data = self.tuple(*zip(*data))
+
+        actions = np.asarray([sample[1] for sample in data], dtype=np.int32)
+        rewards = np.asarray([sample[2] for sample in data], dtype=np.float32)
+        terminals = np.asarray([sample[3] for sample in data], dtype=bool)
 
         states = [None] * len(data[0][0])
         next_states = [None] * len(data[0][0])
         for i in range(0, len(states)):
-            states[i] = np.asarray([x[i] for x in data[0]], dtype=np.float32)
-            next_states[i] = np.asarray([x[i] for x in data[4]], dtype=np.float32)
+            states[i] = np.asarray([sample[0][i] for sample in data], dtype=np.float32)
+            next_states[i] = np.asarray([sample[4][i] for sample in data], dtype=np.float32)
 
-        return states, np.asarray(data[1], dtype=np.int32), np.asarray(data[2], dtype=np.float32), \
-               np.asarray(data[3], dtype=bool), next_states, np.asarray(data[5], dtype=np.float32), \
-               indices
+        weights = None
+
+        return states, actions, rewards, terminals, next_states, weights, indices

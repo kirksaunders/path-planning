@@ -45,7 +45,7 @@ class DDQN:
         self.episodes = 0
     
     @tf.function
-    def train_step(self, gamma, states, actions, rewards, terminals, next_states, priorities):
+    def train_step(self, gamma, states, actions, rewards, terminals, next_states, weights):
         actions_one_hot = tf.one_hot(actions, self.env.num_actions)
         q_next_argmax = tf.argmax(self.q(next_states, training=True), axis=1)
         q_next_actions = tf.one_hot(q_next_argmax, self.env.num_actions)
@@ -80,9 +80,9 @@ class DDQN:
                 self.replay_buffer.add((state, action, reward, terminal, next_state))
 
                 if self.replay_buffer.size >= batch_size:
-                    states, actions, rewards, terminals, next_states, priorities, indices = self.replay_buffer.mini_batch(batch_size)
-                    updated_priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, priorities)
-                    self.replay_buffer.update(indices, updated_priorities)
+                    states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch(batch_size)
+                    priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, weights)
+                    self.replay_buffer.update(indices, priorities)
 
                 state = next_state
 
