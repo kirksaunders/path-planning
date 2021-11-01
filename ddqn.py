@@ -57,7 +57,7 @@ class DDQN:
         with tf.GradientTape() as tape:
             q_values = tf.reduce_sum(tf.multiply(self.q(states, training=True), actions_one_hot), axis=1)
             td_error = q_target_values - q_values
-            loss = tf.reduce_mean(tf.square(td_error))
+            loss = tf.reduce_mean(tf.square(tf.multiply(td_error, weights)))
 
         gradients = tape.gradient(loss, self.q.trainable_variables)
         self.q.optimizer.apply_gradients(zip(gradients, self.q.trainable_variables))
@@ -80,7 +80,7 @@ class DDQN:
                 total_reward += reward
                 self.replay_buffer.add([state, action, reward, terminal, next_state])
 
-                if self.replay_buffer.size >= self.batch_size:
+                if self.replay_buffer.size >= 1000:
                     states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch()
                     priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, weights)
                     self.replay_buffer.update(indices, priorities.numpy())

@@ -68,10 +68,10 @@ import numpy as np
 
         return state_arrays, actions, rewards, terminal, next_state_arrays """
 
+PARTITION_UPDATES = 1000
+
 class ReplayBuffer:
     def __init__(self, capacity, batch_size, alpha):
-        assert batch_size < 100
-
         self.capacity = capacity
         self.batch_size = batch_size
         self.alpha = alpha
@@ -79,7 +79,7 @@ class ReplayBuffer:
         self.next = 0
         self.data = [None] * capacity
         self.heap = [None] * capacity
-        self.partitions = [None] * (capacity // 100 + 1)
+        self.partitions = [None] * (capacity // PARTITION_UPDATES)
 
     def swap(self, a, b):
         self.data[self.heap[a][1]][5] = b
@@ -170,9 +170,11 @@ class ReplayBuffer:
         
         return True
 
-    def generate_partition(self, size):        
-        index = size // 100
-        max_size = (index + 1) * 100
+    def generate_partition(self, size):             
+        p_index = size // PARTITION_UPDATES - 1
+        max_size = (p_index + 1) * PARTITION_UPDATES
+        
+        assert self.size >= max_size
 
         p_dist = np.power(np.arange(1, max_size + 1), -self.alpha)
         p_dist = p_dist / np.sum(p_dist)
@@ -194,24 +196,27 @@ class ReplayBuffer:
             if partition[i] <= partition[i-1]:
                 partition[i] = partition[i-1] + 1
 
-        self.partitions[index] = partition
+        partition = [partition, p_dist]
+
+        self.partitions[p_index] = partition
 
         return partition
 
-    def mini_batch(self):
-        partition = self.partitions[self.size // 100]
+    def mini_batch(self, beta):
+        partition = self.partitions[self.size // PARTITION_UPDATES]
         if partition == None:
             partition = self.generate_partition(self.size)
+        p_dist = partition[1]
+        partition = partition[0]
 
         chosen = [None] * self.batch_size
         for i in range(0, self.batch_size):
             start = partition[i]
-            end = min(partition[i + 1], self.size)
-            chosen[i] = np.random.choice(np.arange(start, end))
+            end = partition[i + 1]
+            chosen[i] = np.random.choice(end - start) + start
 
-        print(chosen)
-
-        exit(0)
+        weights = np.asarray([p_dist[i] for i in chosen], dtype=np.float32) * self.size
+        weights = np.power(weights, -beta) / np.max(weights)
 
         indices = [self.heap[i][1] for i in chosen]
         data = [self.data[i] for i in indices]
@@ -225,7 +230,5 @@ class ReplayBuffer:
         for i in range(0, len(states)):
             states[i] = np.asarray([sample[0][i] for sample in data], dtype=np.float32)
             next_states[i] = np.asarray([sample[4][i] for sample in data], dtype=np.float32)
-
-        weights = None
 
         return states, actions, rewards, terminals, next_states, weights, indices
