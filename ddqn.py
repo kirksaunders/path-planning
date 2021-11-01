@@ -64,7 +64,7 @@ class DDQN:
 
         return tf.abs(td_error)
 
-    def train(self, gamma, epsilon, episode_step_limit, copy_interval):
+    def train(self, gamma, epsilon, episode_step_limit, copy_interval, beta):
         total_rewards = [None] * 100
         while True:
             state = self.env.reset(random=True)
@@ -81,7 +81,7 @@ class DDQN:
                 self.replay_buffer.add([state, action, reward, terminal, next_state])
 
                 if self.replay_buffer.size >= 1000:
-                    states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch()
+                    states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch(beta(self.iterations))
                     priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, weights)
                     self.replay_buffer.update(indices, priorities.numpy())
 
@@ -104,8 +104,6 @@ class DDQN:
                     c += 1
                 print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(
                     self.episodes, self.q.optimizer.learning_rate(self.iterations), epsilon(self.iterations), total_reward, r / c))
-
-                exit(0)
 
                 state = self.env.reset(random=True)
                 for t in range(0, episode_step_limit):

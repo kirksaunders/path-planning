@@ -62,11 +62,12 @@ def main():
     max_episode_steps = 50
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
     exploration_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.5, max_episode_steps, 0.9995)
+    beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
     model = create_nn(learning_rate)
     env = PathPlanningEnv("grid_single_wall.bmp", DIM)
     agent = DDQN(env, model, 65536, 64, 0.7)
-    agent.train(0.999, exploration_rate, max_episode_steps, 128)
+    agent.train(0.999, exploration_rate, max_episode_steps, 128, beta)
 
 if __name__=='__main__':
     main()
