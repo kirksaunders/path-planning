@@ -78,7 +78,7 @@ class ReplayBuffer:
         self.next = 0
         self.data = [None] * capacity
         self.heap = [None] * capacity
-        self.partitions = [None] * (capacity // PARTITION_UPDATES)
+        self.partitions = [None] * (capacity // PARTITION_UPDATES + 1)
 
     def swap(self, a, b):
         self.data[self.heap[a][1]][5] = b
