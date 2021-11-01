@@ -1,6 +1,5 @@
-from collections import namedtuple
+import math
 import numpy as np
-import random
 
 """ class ReplayBuffer:
     def __init__(self, capacity, state_shapes):
@@ -70,26 +69,31 @@ import random
         return state_arrays, actions, rewards, terminal, next_state_arrays """
 
 class ReplayBuffer:
-    def __init__(self, capacity):
-        self.data = [None] * capacity
-        self.heap = [None] * capacity
+    def __init__(self, capacity, batch_size, alpha):
+        assert batch_size < 100
+
         self.capacity = capacity
+        self.batch_size = batch_size
+        self.alpha = alpha
         self.size = 0
         self.next = 0
+        self.data = [None] * capacity
+        self.heap = [None] * capacity
+        self.partitions = [None] * (capacity // 100 + 1)
 
     def swap(self, a, b):
-        temp = self.data[a]
-        self.data[a] = self.data[b]
-        self.data[b] = temp
+        self.data[self.heap[a][1]][5] = b
+        self.data[self.heap[b][1]][5] = a
 
-        self.data[a][6] = b
-        self.data[b][6] = a
+        temp = self.heap[a]
+        self.heap[a] = self.heap[b]
+        self.heap[b] = temp
 
     def siftup(self, index):
         while index > 0:
             parent = (index - 1) // 2
 
-            if self.data[self.heap[parent]][5] < self.data[self.heap[index]][5]:
+            if self.heap[parent][0] < self.heap[index][0]:
                 self.swap(index, parent)
                 index = parent
             else:
@@ -103,12 +107,12 @@ class ReplayBuffer:
             if left_child >= self.size:
                 break
 
-            if right_child >= self.size or self.data[self.heap[left_child]][5] > self.data[self.heap[right_child]][5]:
+            if right_child >= self.size or self.heap[left_child][0] > self.heap[right_child][0]:
                 max_child = left_child
             else:
                 max_child = right_child
 
-            if self.data[self.heap[index]][5] < self.data[self.heap[max_child]][5]:
+            if self.heap[index][0] < self.heap[max_child][0]:
                 self.swap(index, max_child)
                 index = max_child
             else:
@@ -117,56 +121,99 @@ class ReplayBuffer:
     def add(self, experience):
         priority = 0
         if self.size > 0:
-            priority = self.data[self.heap[0]][5] + 1
+            priority = self.heap[0][0] + 1
 
         if self.size < self.capacity:
-            self.data[self.next] = experience + [priority, self.next]
-            self.heap[self.next] = self.next
+            self.data[self.next] = experience + [self.next]
+            self.heap[self.next] = [priority, self.next]
             self.size += 1
 
             self.siftup(self.next)
         else:
-            old = self.data[self.next][5]
-            self.data[self.next] = experience + [priority, self.data[self.next][6]]
-            self.heap[self.next] = self.next
+            heap_index = self.data[self.next][5]
+            old = self.heap[heap_index][0]
+            self.data[self.next] = experience + [heap_index]
+            self.heap[heap_index] = [priority, self.next]
             
             if priority > old:
-                self.siftup(self.next)
+                self.siftup(heap_index)
             elif priority < old:
-                self.siftdown(self.next)
+                self.siftdown(heap_index)
 
         self.next = (self.next + 1) % self.capacity
 
-        assert self.is_heap()
+        #assert self.is_heap()
 
     def update(self, indices, priorities):
         for (index, priority) in zip(indices, priorities):
-            old = self.data[index][5]
-            self.data[index][5] = priority
+            heap_index = self.data[index][5]
+            old = self.heap[heap_index][0]
+            self.heap[heap_index][0] = priority
 
             if priority > old:
-                self.siftup(index)
+                self.siftup(heap_index)
             elif priority < old:
-                self.siftdown(index)
+                self.siftdown(heap_index)
 
-        assert self.is_heap()
+        #assert self.is_heap()
 
     def is_heap(self):
         for i in range(0, self.size):
             left_child = 2*i + 1
             right_child = 2*i + 2
 
-            if left_child < self.size and self.data[self.heap[i]][5] < self.data[self.heap[left_child]][5]:
+            if left_child < self.size and self.heap[i][0] < self.heap[left_child][0]:
                 return False
             
-            if right_child < self.size and self.data[self.heap[i]][5] < self.data[self.heap[right_child]][5]:
+            if right_child < self.size and self.heap[i][0] < self.heap[right_child][0]:
                 return False
         
         return True
 
-    def mini_batch(self, size):
-        chosen = np.random.choice(self.size, size, replace=False)
-        indices = [self.heap[i] for i in chosen]
+    def generate_partition(self, size):        
+        index = size // 100
+        max_size = (index + 1) * 100
+
+        p_dist = np.power(np.arange(1, max_size + 1), -self.alpha)
+        p_dist = p_dist / np.sum(p_dist)
+
+        partition = np.zeros(self.batch_size + 1, dtype=np.int32)
+        partition[0] = 0
+        partition[self.batch_size] = max_size
+
+        cumulative_sum = 0
+        index = 0
+        for i in range(1, self.batch_size):
+            end = i / self.batch_size
+            while cumulative_sum < end:
+                cumulative_sum += p_dist[index]
+                index += 1
+            partition[i] = index
+
+        for i in range(1, len(partition)):
+            if partition[i] <= partition[i-1]:
+                partition[i] = partition[i-1] + 1
+
+        self.partitions[index] = partition
+
+        return partition
+
+    def mini_batch(self):
+        partition = self.partitions[self.size // 100]
+        if partition == None:
+            partition = self.generate_partition(self.size)
+
+        chosen = [None] * self.batch_size
+        for i in range(0, self.batch_size):
+            start = partition[i]
+            end = min(partition[i + 1], self.size)
+            chosen[i] = np.random.choice(np.arange(start, end))
+
+        print(chosen)
+
+        exit(0)
+
+        indices = [self.heap[i][1] for i in chosen]
         data = [self.data[i] for i in indices]
 
         actions = np.asarray([sample[1] for sample in data], dtype=np.int32)

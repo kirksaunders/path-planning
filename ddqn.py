@@ -35,12 +35,13 @@ def train_step(env, q, q_target, gamma, states, actions, rewards, terminals, nex
     q.optimizer.apply_gradients(zip(gradients, q.trainable_variables)) """
 
 class DDQN:
-    def __init__(self, env, q, replay_size):
+    def __init__(self, env, q, replay_size, batch_size, alpha):
         self.env = env
         self.q = q
         self.q_target = tf.keras.models.clone_model(q)
         self.q_target.set_weights(q.get_weights())
-        self.replay_buffer = ReplayBuffer(replay_size)
+        self.replay_buffer = ReplayBuffer(replay_size, batch_size, alpha)
+        self.batch_size = batch_size
         self.iterations = 0
         self.episodes = 0
     
@@ -63,7 +64,7 @@ class DDQN:
 
         return tf.abs(td_error)
 
-    def train(self, gamma, epsilon, episode_step_limit, batch_size, copy_interval):
+    def train(self, gamma, epsilon, episode_step_limit, copy_interval):
         total_rewards = [None] * 100
         while True:
             state = self.env.reset(random=True)
@@ -77,12 +78,12 @@ class DDQN:
 
                 next_state, reward, terminal = self.env.step(action)
                 total_reward += reward
-                self.replay_buffer.add((state, action, reward, terminal, next_state))
+                self.replay_buffer.add([state, action, reward, terminal, next_state])
 
-                if self.replay_buffer.size >= batch_size:
-                    states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch(batch_size)
+                if self.replay_buffer.size >= self.batch_size:
+                    states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch()
                     priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, weights)
-                    self.replay_buffer.update(indices, priorities)
+                    self.replay_buffer.update(indices, priorities.numpy())
 
                 state = next_state
 
@@ -103,6 +104,8 @@ class DDQN:
                     c += 1
                 print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(
                     self.episodes, self.q.optimizer.learning_rate(self.iterations), epsilon(self.iterations), total_reward, r / c))
+
+                exit(0)
 
                 state = self.env.reset(random=True)
                 for t in range(0, episode_step_limit):

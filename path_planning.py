@@ -65,8 +65,8 @@ def main():
 
     model = create_nn(learning_rate)
     env = PathPlanningEnv("grid_single_wall.bmp", DIM)
-    agent = DDQN(env, model, 65536)
-    agent.train(0.999, exploration_rate, max_episode_steps, 64, 128)
+    agent = DDQN(env, model, 65536, 64, 0.7)
+    agent.train(0.999, exploration_rate, max_episode_steps, 128)
 
 if __name__=='__main__':
     main()
