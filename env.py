@@ -1,8 +1,9 @@
 import numpy as np
 from PIL import Image, ImageDraw
+import tkinter as tk
 
 class PathPlanningEnv:
-    def __init__(self, map, dim):
+    def __init__(self, map, dim, tkinter_root=None, on_click_left=None, on_click_right=None):
         # Load grid from map
         img = Image.open(map, "r")
         width, height = img.size
@@ -19,8 +20,19 @@ class PathPlanningEnv:
         self.path = np.zeros((self.grid_height, self.grid_width), dtype=bool)
 
         self.num_actions = 8
-        self.draw_size = 25
+        self.draw_size = 15
         self.dim = dim
+
+        if tkinter_root != None:
+            self.tk_root = tkinter_root
+            self.canvas = tk.Canvas(tkinter_root, width=self.grid_width*self.draw_size, height=self.grid_height*self.draw_size)
+            if on_click_left != None:
+                self.canvas.bind("<Button-1>", on_click_left)
+            if on_click_right != None:
+                self.canvas.bind("<Button-3>", on_click_right)
+            self.canvas.pack()
+        else:
+            self.canvas = None
 
     def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=False):
         if random:
@@ -31,7 +43,7 @@ class PathPlanningEnv:
 
             while True:
                 self.goal = np.array([np.random.choice(self.grid_width), np.random.choice(self.grid_height)])
-                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos):
+                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos) and np.linalg.norm(self.goal - self.pos) < 30:
                     break
         else:
             self.pos = start
@@ -42,7 +54,7 @@ class PathPlanningEnv:
 
         return self.get_state()
 
-    def move(self, dir):
+    def _move(self, dir):
         new_pos = self.pos + dir
 
         if (
@@ -61,30 +73,31 @@ class PathPlanningEnv:
         old_pos = self.pos
 
         if action == 0: # up
-            result = self.move(np.array([0, -1]))
+            result = self._move(np.array([0, -1]))
         elif action == 1: # up right
-            result = self.move(np.array([1, -1]))
+            result = self._move(np.array([1, -1]))
         elif action == 2: # right
-            result = self.move(np.array([1, 0]))
+            result = self._move(np.array([1, 0]))
         elif action == 3: # down right
-            result = self.move(np.array([1, 1]))
+            result = self._move(np.array([1, 1]))
         elif action == 4: # down
-            result = self.move(np.array([0, 1]))
+            result = self._move(np.array([0, 1]))
         elif action == 5: # down left
-            result = self.move(np.array([-1, 1]))
+            result = self._move(np.array([-1, 1]))
         elif action == 6: # left
-            result = self.move(np.array([-1, 0]))
+            result = self._move(np.array([-1, 0]))
         elif action == 7: # up left
-            result = self.move(np.array([-1, -1]))
+            result = self._move(np.array([-1, -1]))
         else:
             raise ValueError("Invalid action taken: " + str(action))
 
-        reward = -np.linalg.norm(self.goal - self.pos)
+        dist = np.linalg.norm(self.goal - self.pos)
+        reward = -dist + 100 * np.exp(-0.75*dist)
         terminal = np.array_equal(self.goal, self.pos)
         if terminal:
             reward += 500
         if result == False:
-            reward -= 100
+            reward -= 50
 
         return self.get_state(), reward, terminal
 
@@ -106,7 +119,7 @@ class PathPlanningEnv:
 
         return [state, dir]
 
-    def draw(self, out_file="results/out.png"):
+    def draw_img(self, out_file="results/out.png"):
         with Image.new(mode="RGB", size=(self.grid_width*self.draw_size, self.grid_height*self.draw_size)) as img:
             draw = ImageDraw.Draw(img)
             
@@ -132,9 +145,8 @@ class PathPlanningEnv:
                     )
             
             img.save(out_file)
-
     
-    def display(self):
+    def _display_console(self):
         for y in range(0, self.grid_height):
             for x in range(0, self.grid_width):
                 if x == self.pos[0] and y == self.pos[1]:
@@ -150,3 +162,34 @@ class PathPlanningEnv:
             print("")
         print("")
         print("")
+
+    def _display_tk(self):
+        self.canvas.delete("all")
+        for y in range(0, self.grid_height):
+            for x in range(0, self.grid_width):
+                if x == self.goal[0] and y == self.goal[1]:
+                    color = "green"
+                elif x == self.start[0] and y == self.start[1]:
+                    color = "red"
+                elif x == self.pos[0] and y == self.pos[1]:
+                    color = "orange"
+                elif self.grid[y, x] == 1:
+                    color = "#101010"
+                elif self.path[y, x] == 1:
+                    color = "cyan"
+                else:
+                    color = "white"
+
+                self.canvas.create_rectangle(
+                    x*self.draw_size, y*self.draw_size,
+                    (x+1)*self.draw_size, (y+1)*self.draw_size,
+                    fill=color
+                )
+        self.tk_root.update()
+
+    def display(self):
+        if self.canvas == None:
+            self._display_console()
+        else:
+            self._display_tk()
+        
