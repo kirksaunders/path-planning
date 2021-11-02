@@ -20,7 +20,7 @@ class PathPlanningEnv:
         self.path = np.zeros((self.grid_height, self.grid_width), dtype=bool)
 
         self.num_actions = 8
-        self.draw_size = 25
+        self.draw_size = 15
         self.dim = dim
 
         if tkinter_root != None:
@@ -43,7 +43,7 @@ class PathPlanningEnv:
 
             while True:
                 self.goal = np.array([np.random.choice(self.grid_width), np.random.choice(self.grid_height)])
-                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos):
+                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos) and np.linalg.norm(self.goal - self.pos) < 30:
                     break
         else:
             self.pos = start
@@ -91,12 +91,13 @@ class PathPlanningEnv:
         else:
             raise ValueError("Invalid action taken: " + str(action))
 
-        reward = -np.linalg.norm(self.goal - self.pos)
+        dist = np.linalg.norm(self.goal - self.pos)
+        reward = -dist + 100 * np.exp(-0.75*dist)
         terminal = np.array_equal(self.goal, self.pos)
         if terminal:
             reward += 500
         if result == False:
-            reward -= 100
+            reward -= 50
 
         return self.get_state(), reward, terminal
 

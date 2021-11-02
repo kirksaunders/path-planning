@@ -9,7 +9,7 @@ import tensorflow as tf
 import tkinter as tk
 from time import sleep
 
-DIM = 4
+DIM = 5
 
 def create_cnn():
     return tf.keras.models.Sequential([
@@ -66,7 +66,7 @@ def create_nn(lr):
 def train():
     tk_root = tk.Tk()
 
-    max_episode_steps = 50
+    max_episode_steps = 75
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
     exploration_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.5, max_episode_steps, 0.9995)
 
