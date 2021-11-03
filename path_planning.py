@@ -68,14 +68,18 @@ def create_nn(lr):
 
     return model
 
-def train():
+def train(model_file = None):
     tk_root = tk.Tk()
 
     max_episode_steps = 200
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
     exploration_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.5, max_episode_steps, 0.9995)
 
-    model = create_nn(learning_rate)
+    if model_file == None:
+        model = create_nn(learning_rate)
+    else:
+        model = tf.keras.models.load_model(model_file)
+
     env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
     agent = DDQN(env, model, 1000000)
     agent.train(0.999, exploration_rate, max_episode_steps, 64, 250)
@@ -108,7 +112,7 @@ def evaluate(model_file):
             env.display()
             if terminal:
                 break
-            sleep(0.1)
+            sleep(0.025)
 
     def on_click_left(event):
         nonlocal start
@@ -137,5 +141,7 @@ def evaluate(model_file):
 if __name__=='__main__':
     if len(sys.argv) >= 3 and sys.argv[1] == "evaluate":
         evaluate(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "resume":
+        train(sys.argv[2])
     else:
         train()
