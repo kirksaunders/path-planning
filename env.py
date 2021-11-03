@@ -43,7 +43,7 @@ class PathPlanningEnv:
 
             while True:
                 self.goal = np.array([np.random.choice(self.grid_width), np.random.choice(self.grid_height)])
-                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos) and np.linalg.norm(self.goal - self.pos) < 30:
+                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos):
                     break
         else:
             self.pos = start
@@ -91,13 +91,26 @@ class PathPlanningEnv:
         else:
             raise ValueError("Invalid action taken: " + str(action))
 
-        dist = np.linalg.norm(self.goal - self.pos)
-        reward = -dist + 100 * np.exp(-0.75*dist)
         terminal = np.array_equal(self.goal, self.pos)
         if terminal:
-            reward += 500
+            reward = 2
+        else:
+            reward = -1
         if result == False:
-            reward -= 50
+            reward -= 1
+
+        #dist = np.linalg.norm(self.goal - self.pos)
+        #reward = -0.01 * dist * dist - 5
+        #terminal = np.array_equal(self.goal, self.pos)
+        #if terminal:
+        #    reward += 500
+        #if result == False:
+        #    reward -= 50
+
+        # "Normalize" the reward so it's closer to the range [-1, 1]
+        #reward = reward / 1000.0
+        # reward clipping?
+        #reward = np.sign(reward)
 
         return self.get_state(), reward, terminal
 
@@ -112,10 +125,10 @@ class PathPlanningEnv:
                         state[dy+self.dim, dx+self.dim, 0] = self.grid[y, x]
 
         dir = self.goal - self.pos
-        norm = np.linalg.norm(dir)
-        if norm == 0:
-            norm = 1
-        dir = dir / norm
+        #norm = np.linalg.norm(dir)
+        #if norm == 0:
+        #    norm = 1
+        #dir = dir / norm
 
         return [state, dir]
 

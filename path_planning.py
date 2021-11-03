@@ -12,53 +12,58 @@ from time import sleep
 DIM = 5
 
 def create_cnn():
+    initializer = tf.keras.initializers.VarianceScaling(2.0)
+
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
             filters = 4,
-            kernel_size = 3,
+            kernel_size = 4,
             strides = 1,
             activation = "relu",
-            padding = "same",
+            kernel_initializer = initializer,
             input_shape = (2*DIM+1, 2*DIM+1, 1)
         ),
-        tf.keras.layers.MaxPooling2D(
+        tf.keras.layers.AveragePooling2D(
             pool_size = 2,
-            padding = "same"
         ),
         tf.keras.layers.Conv2D(
             filters = 8,
-            kernel_size = 3,
+            kernel_size = 2,
             strides = 1,
             activation = "relu",
-            padding = "same",
+            kernel_initializer = initializer,
         ),
-        tf.keras.layers.MaxPooling2D(
+        tf.keras.layers.AveragePooling2D(
             pool_size = 2,
-            padding = "same"
         ),
         tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(32, activation = "tanh"),
+        tf.keras.layers.Dense(64, activation = "relu", kernel_initializer=initializer),
         #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
 def create_dnn():
+    initializer = tf.keras.initializers.VarianceScaling(2.0)
+
     return tf.keras.models.Sequential([
-        tf.keras.layers.Dense(16, input_dim = 2, activation = "tanh"),
+        tf.keras.layers.Dense(16, input_dim = 2, activation = "relu", kernel_initializer=initializer),
         #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
 def create_nn(lr):
     cnn = create_cnn()
     dnn = create_dnn()
+
+    initializer = tf.keras.initializers.VarianceScaling(2.0)
         
     input = tf.keras.layers.concatenate([cnn.output, dnn.output])
-    x = tf.keras.layers.Dense(32, activation = "relu")(input)
+    x = tf.keras.layers.Dense(32, activation = "relu", kernel_initializer=initializer)(input)
+    #x = tf.keras.layers.Dense(16, activation = "linear")(x)
     output = tf.keras.layers.Dense(8, activation = "linear")(x)
 
     model = tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(lr)
+        optimizer = tf.keras.optimizers.Adam(lr, clipnorm=1.0)
     )
 
     return model
@@ -66,14 +71,14 @@ def create_nn(lr):
 def train():
     tk_root = tk.Tk()
 
-    max_episode_steps = 75
+    max_episode_steps = 200
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
     exploration_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.5, max_episode_steps, 0.9995)
 
     model = create_nn(learning_rate)
-    env = PathPlanningEnv("grid_single_wall.bmp", DIM, tk_root)
-    agent = DDQN(env, model, 65536)
-    agent.train(0.999, exploration_rate, max_episode_steps, 64, 128)
+    env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
+    agent = DDQN(env, model, 1000000)
+    agent.train(0.999, exploration_rate, max_episode_steps, 64, 250)
 
 def evaluate(model_file):
     tk_root = tk.Tk()
@@ -91,7 +96,7 @@ def evaluate(model_file):
         total_reward = 0
         state = env.reset(start, end)
         for t in range(0, max_episode_steps):
-            action = np.argmax(model(state_to_tf_input(state)))
+            action = np.argmax(model(state_to_tf_input(state), training=False))
             state, reward, terminal = env.step(action)
             total_reward += reward
             env.display()
@@ -117,7 +122,7 @@ def evaluate(model_file):
         end = np.array([x, y])
         run()
 
-    env = PathPlanningEnv("grid_single_wall.bmp", DIM, tk_root, on_click_left, on_click_right)
+    env = PathPlanningEnv("grid2.bmp", DIM, tk_root, on_click_left, on_click_right)
     env.display()
 
     tk_root.mainloop()
