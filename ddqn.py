@@ -100,7 +100,7 @@ class DDQN:
                 print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(
                     self.episodes, self.q.optimizer.learning_rate(self.iterations), epsilon(self.iterations), total_reward, r / c))
 
-                self.q.save("results/ep{}".format(self.episodes))
+                self.q.save("results/ep{}.h5".format(self.episodes))
 
                 state = self.env.reset(random=True)
                 for t in range(0, episode_step_limit):

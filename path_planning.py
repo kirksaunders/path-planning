@@ -89,13 +89,19 @@ def evaluate(model_file):
 
     start = np.array([0, 0])
     end = np.array([5, 5])
+    input = 0
 
     def run():
-        nonlocal env, start, end
+        nonlocal env, start, end, input
+
+        input += 1
+        input_copy = input
 
         total_reward = 0
         state = env.reset(start, end)
         for t in range(0, max_episode_steps):
+            if input != input_copy:
+                break
             action = np.argmax(model(state_to_tf_input(state), training=False))
             state, reward, terminal = env.step(action)
             total_reward += reward
