@@ -57,7 +57,7 @@ class DDQN:
         with tf.GradientTape() as tape:
             q_values = tf.reduce_sum(tf.multiply(self.q(states, training=True), actions_one_hot), axis=1)
             td_error = q_target_values - q_values
-            loss = tf.reduce_mean(tf.square(tf.multiply(td_error, weights)))
+            loss = tf.multiply(tf.reduce_mean(tf.square(td_error)), weights)
 
         gradients = tape.gradient(loss, self.q.trainable_variables)
         self.q.optimizer.apply_gradients(zip(gradients, self.q.trainable_variables))

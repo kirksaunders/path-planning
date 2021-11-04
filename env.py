@@ -92,10 +92,11 @@ class PathPlanningEnv:
             raise ValueError("Invalid action taken: " + str(action))
 
         terminal = np.array_equal(self.goal, self.pos)
+        reward = 0
         if terminal:
-            reward = 2
+            reward += 1
         else:
-            reward = -1
+            reward -= 1
         if result == False:
             reward -= 1
 

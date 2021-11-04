@@ -8,7 +8,7 @@ class ReplayBuffer:
         self.size = 0
         self.tree_size = 0
         self.next = 0
-        self.max_priority = 0.1
+        self.max_priority = 0.001
         self.data = [None] * capacity
         self.tree = [None] * (2*capacity - 1)
         self.rng = np.random.default_rng()
@@ -57,7 +57,7 @@ class ReplayBuffer:
         #assert self.is_sumtree()
 
     def update(self, indices, priorities):
-        priorities = np.power(priorities + 0.1, self.alpha)
+        priorities = np.power(priorities, self.alpha) + 0.001
         self.max_priority = max(self.max_priority, np.max(priorities))
         for (index, priority) in zip(indices, priorities):
             tree_index = self.data[index][5]
@@ -114,6 +114,7 @@ class ReplayBuffer:
         weights = np.asarray([c[0] for c in chosen], dtype=np.float32) / total_sum
         weights = np.power(weights * self.size, -beta)
         weights = weights / np.max(weights)
+        weights = weights.astype(np.float32)
 
         indices = [c[1] for c in chosen]
         data = [self.data[i] for i in indices]

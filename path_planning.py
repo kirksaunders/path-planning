@@ -82,7 +82,7 @@ def train(model_file = None):
         model = tf.keras.models.load_model(model_file)
 
     env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
-    agent = DDQN(env, model, 1000000, 64, 0.7)
+    agent = DDQN(env, model, 1000000, 64, 0.6)
     agent.train(0.999, exploration_rate, max_episode_steps, 250, beta)
 
 def evaluate(model_file):
