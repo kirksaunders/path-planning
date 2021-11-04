@@ -1,224 +1,129 @@
 import numpy as np
 
-""" class ReplayBuffer:
-    def __init__(self, capacity, state_shapes):
-        assert capacity > 0
-        self.capacity = capacity
-        self.size = 0
-        self.insert_index = 0
-
-        assert(type(state_shapes) is list)
-
-        self.state_arrays = [None] * len(state_shapes)
-        for i in range(0, len(state_shapes)):
-            if type(state_shapes[i]) is tuple:
-                shape = (capacity, *(state_shapes[i]))
-            else:
-                shape = (capacity, state_shapes[i])
-            self.state_arrays[i] = np.empty(shape, dtype=np.float32)
-
-        self.actions = np.empty(capacity, dtype=np.int32)
-        self.rewards = np.empty(capacity, dtype=np.float32)
-        self.terminal = np.empty(capacity, dtype=bool)
-        self.next_state_arrays = copy.deepcopy(self.state_arrays)
-
-    def add(self, state, action, reward, terminal, next_state):
-        assert(type(state) is list)
-        assert(type(next_state) is list)
-        assert(len(state) == len(self.state_arrays))
-        assert(len(next_state) == len(self.next_state_arrays))
-
-        for i in range(0, len(state)):
-            self.state_arrays[i][self.insert_index, ...] = state[i]
-        self.actions[self.insert_index] = action
-        self.rewards[self.insert_index] = reward
-        self.terminal[self.insert_index] = terminal
-        for i in range(0, len(next_state)):
-            self.next_state_arrays[i][self.insert_index, ...] = next_state[i]
-
-        self.insert_index += 1
-        if self.insert_index >= self.capacity:
-            self.insert_index = 0
-
-        if self.size < self.capacity:
-            self.size += 1
-
-    def mini_batch(self, size):
-        assert(self.size >= size)
-
-        # Allocate space for return batch
-        state_arrays = [None] * len(self.state_arrays)
-        for i in range(0, len(self.state_arrays)):
-            state_arrays[i] = np.empty((size, *(self.state_arrays[i][0].shape)), dtype=np.float32)
-        actions = np.empty(size, dtype=np.int32)
-        rewards = np.empty(size, dtype=np.float32)
-        terminal = np.empty(size, dtype=bool)
-        next_state_arrays = copy.deepcopy(state_arrays)
-
-        # Select samples
-        selected = np.random.choice(self.size, size, replace=False)
-        for i in range(0, len(selected)):
-            for j in range(0, len(state_arrays)):
-                state_arrays[j][i] = self.state_arrays[j][selected[i]]
-                next_state_arrays[j][i] = self.next_state_arrays[j][selected[i]]
-            actions[i] = self.actions[selected[i]]
-            rewards[i] = self.rewards[selected[i]]
-            terminal[i] = self.terminal[selected[i]]
-
-        return state_arrays, actions, rewards, terminal, next_state_arrays """
-
 PARTITION_UPDATES = 1000
 
+def next_pow2(x):
+    p = 1
+    while p < x:
+        p = p << 1
+
+    return p
+
 class ReplayBuffer:
-    def __init__(self, capacity, batch_size, alpha):
+    def __init__(self, capacity, alpha):
         self.capacity = capacity
-        self.batch_size = batch_size
         self.alpha = alpha
         self.size = 0
+        self.tree_size = 0
         self.next = 0
         self.data = [None] * capacity
-        self.heap = [None] * capacity
-        self.partitions = [None] * (capacity // PARTITION_UPDATES + 1)
+        self.tree = [None] * 2*capacity - 1
+        self.rng = np.random.default_rng()
 
-    def swap(self, a, b):
-        self.data[self.heap[a][1]][5] = b
-        self.data[self.heap[b][1]][5] = a
+    def _propagate(self, index, delta):
+        while index >= 0:
+            self.tree[index][0] += delta
+            index = (index - 1) // 2
 
-        temp = self.heap[a]
-        self.heap[a] = self.heap[b]
-        self.heap[b] = temp
+    def _insert_tree(self, value, data_index):
+        index = self.tree_size
 
-    def siftup(self, index):
-        while index > 0:
+        if self.tree_size > 0:
             parent = (index - 1) // 2
 
-            if self.heap[parent][0] < self.heap[index][0]:
-                self.swap(index, parent)
-                index = parent
-            else:
-                break
+            # Move parent to index and put our new value in index+1
+            self.tree[index] = self.tree[parent]
+            self.tree[index + 1] = [value, data_index]
 
-    def siftdown(self, index):
-        while index < self.size:
-            left_child = 2*index + 1
-            right_child = 2*index + 2
+            # Update indices in data table so they point into tree correctly
+            self.data[self.tree[index][1]][5] = index
+            self.data[data_index][5] = index + 1
 
-            if left_child >= self.size:
-                break
-
-            if right_child >= self.size or self.heap[left_child][0] > self.heap[right_child][0]:
-                max_child = left_child
-            else:
-                max_child = right_child
-
-            if self.heap[index][0] < self.heap[max_child][0]:
-                self.swap(index, max_child)
-                index = max_child
-            else:
-                break
+            self._propagate(parent, value)
+            self.tree_size += 2
+        else:
+            self.tree[index] = [value, data_index]
+            self.tree_size += 1
 
     def add(self, experience):
         priority = 0
         if self.size > 0:
-            priority = self.heap[0][0] + 1
+            priority = self.tree[0][0]
 
         if self.size < self.capacity:
-            self.data[self.next] = experience + [self.next]
-            self.heap[self.next] = [priority, self.next]
+            self.data[self.next] = experience + [0]
+            self._insert_tree(priority, self.next)
             self.size += 1
-
-            self.siftup(self.next)
         else:
-            heap_index = self.data[self.next][5]
-            old = self.heap[heap_index][0]
-            self.data[self.next] = experience + [heap_index]
-            self.heap[heap_index] = [priority, self.next]
-            
-            if priority > old:
-                self.siftup(heap_index)
-            elif priority < old:
-                self.siftdown(heap_index)
+            tree_index = self.data[self.next][5]
+            old = self.tree[tree_index][0]
+            self.data[self.next] = experience + [tree_index]
+            self.tree[tree_index][1] = self.next
+            self._propagate(tree_index, priority - old)
 
         self.next = (self.next + 1) % self.capacity
 
-        #assert self.is_heap()
+        assert self.is_sumtree()
 
     def update(self, indices, priorities):
+        priorities = np.power(priorities + 0.0001, self.alpha)
         for (index, priority) in zip(indices, priorities):
-            heap_index = self.data[index][5]
-            old = self.heap[heap_index][0]
-            self.heap[heap_index][0] = priority
+            tree_index = self.data[index][5]
+            old = self.tree[tree_index][0]
+            self._propagate(tree_index, priority - old)
 
-            if priority > old:
-                self.siftup(heap_index)
-            elif priority < old:
-                self.siftdown(heap_index)
+        assert self.is_sumtree()
 
-        #assert self.is_heap()
-
-    def is_heap(self):
-        for i in range(0, self.size):
+    def is_sumtree(self):
+        for i in range(0, self.tree_size):
             left_child = 2*i + 1
-            right_child = 2*i + 2
+            right_child = left_child + 1
 
-            if left_child < self.size and self.heap[i][0] < self.heap[left_child][0]:
-                return False
-            
-            if right_child < self.size and self.heap[i][0] < self.heap[right_child][0]:
+            sum = 0
+            leaf = True
+            if left_child < self.tree_size:
+                leaf = False
+                sum += self.tree[left_child][0]
+
+            if right_child < self.tree_size:
+                leaf = False
+                sum += self.tree[right_child][0]
+
+            if not leaf and abs(self.tree[i][0] - sum) > 0.0001:
                 return False
         
         return True
 
-    def generate_partition(self, size):             
-        p_index = size // PARTITION_UPDATES - 1
-        max_size = (p_index + 1) * PARTITION_UPDATES
-        
-        assert self.size >= max_size
+    def sample_tree(self, val):
+        assert self.tree_size > 0
 
-        p_dist = np.power(np.arange(1, max_size + 1), -self.alpha)
-        p_dist = p_dist / np.sum(p_dist)
-
-        partition = np.zeros(self.batch_size + 1, dtype=np.int32)
-        partition[0] = 0
-        partition[self.batch_size] = max_size
-
-        cumulative_sum = 0
         index = 0
-        for i in range(1, self.batch_size):
-            end = i / self.batch_size
-            while cumulative_sum < end:
-                cumulative_sum += p_dist[index]
-                index += 1
-            partition[i] = index
+        while True:
+            left_child = 2*index + 1
+            right_child = left_child + 1
 
-        for i in range(1, len(partition)):
-            if partition[i] <= partition[i-1]:
-                partition[i] = partition[i-1] + 1
+            if left_child >= self.tree_size:
+                return self.tree[index]
+            
+            if val <= self.tree[left_child][0] or right_child >= self.tree_size:
+                index = left_child
+            else:
+                index = right_child
+                val -= self.tree[left_child][0]
 
-        partition = [partition, p_dist]
+    def mini_batch(self, batch_size, beta):
+        assert self.size >= batch_size
 
-        self.partitions[p_index] = partition
+        total_sum = self.tree[0][0]
 
-        return partition
+        samples = self.rng.uniform(0.0, total_sum, batch_size)
+        chosen = [self.sample_tree(i) for i in samples]
 
-    def mini_batch(self, beta):
-        partition = self.partitions[self.size // PARTITION_UPDATES]
-        if partition == None:
-            partition = self.generate_partition(self.size)
-        p_dist = partition[1]
-        partition = partition[0]
-
-        chosen = [None] * self.batch_size
-        for i in range(0, self.batch_size):
-            start = partition[i]
-            end = partition[i + 1]
-            chosen[i] = np.random.choice(end - start) + start
-
-        weights = np.asarray([p_dist[i] for i in chosen], dtype=np.float32) * self.size
-        weights = np.power(weights, -beta)
+        weights = np.asarray([c[0] for c in chosen], dtype=np.float32) / total_sum
+        weights = np.power(weights * self.size, -beta)
         weights = weights / np.max(weights)
 
-        indices = [self.heap[i][1] for i in chosen]
+        indices = [c[1] for c in chosen]
         data = [self.data[i] for i in indices]
 
         actions = np.asarray([sample[1] for sample in data], dtype=np.int32)
