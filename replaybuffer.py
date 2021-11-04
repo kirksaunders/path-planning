@@ -1,8 +1,9 @@
 import numpy as np
 
 class ReplayBuffer:
-    def __init__(self, capacity, alpha):
+    def __init__(self, capacity, batch_size, alpha):
         self.capacity = capacity
+        self.batch_size = batch_size
         self.alpha = alpha
         self.size = 0
         self.tree_size = 0
@@ -102,12 +103,12 @@ class ReplayBuffer:
                 index = right_child
                 val -= self.tree[left_child][0]
 
-    def mini_batch(self, batch_size, beta):
-        assert self.size >= batch_size
+    def mini_batch(self, beta):
+        assert self.size >= self.batch_size
 
         total_sum = self.tree[0][0]
 
-        samples = self.rng.uniform(0.0, total_sum, batch_size)
+        samples = self.rng.uniform(0.0, total_sum, self.batch_size)
         chosen = [self.sample_tree(i) for i in samples]
 
         weights = np.asarray([c[0] for c in chosen], dtype=np.float32) / total_sum
