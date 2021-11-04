@@ -215,7 +215,8 @@ class ReplayBuffer:
             chosen[i] = np.random.choice(end - start) + start
 
         weights = np.asarray([p_dist[i] for i in chosen], dtype=np.float32) * self.size
-        weights = np.power(weights, -beta) / np.max(weights)
+        weights = np.power(weights, -beta)
+        weights = weights / np.max(weights)
 
         indices = [self.heap[i][1] for i in chosen]
         data = [self.data[i] for i in indices]
