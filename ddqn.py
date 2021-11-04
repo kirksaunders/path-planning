@@ -96,7 +96,7 @@ class DDQN:
             total_rewards[self.episodes % 100] = total_reward
             self.episodes += 1
 
-            if self.episodes % 100 == 0:
+            if self.episodes % 50 == 0:
                 r = 0.0
                 c = 0
                 for i in range(0, min(100, self.episodes)):
@@ -104,6 +104,8 @@ class DDQN:
                     c += 1
                 print("Episode {}, learning rate: {}, epsilon: {}, episode reward: {}, average reward: {}".format(
                     self.episodes, self.q.optimizer.learning_rate(self.iterations), epsilon(self.iterations), total_reward, r / c))
+
+                exit(0)
 
                 self.q.save("results/ep{}.h5".format(self.episodes))
 
