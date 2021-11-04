@@ -1,14 +1,5 @@
 import numpy as np
 
-PARTITION_UPDATES = 1000
-
-def next_pow2(x):
-    p = 1
-    while p < x:
-        p = p << 1
-
-    return p
-
 class ReplayBuffer:
     def __init__(self, capacity, alpha):
         self.capacity = capacity
