@@ -80,7 +80,7 @@ class DDQN:
                 total_reward += reward
                 self.replay_buffer.add([state, action, reward, terminal, next_state])
 
-                if self.replay_buffer.size >= 1000 and self.iterations % 4 == 0:
+                if self.replay_buffer.size >= self.batch_size and self.iterations % 4 == 0:
                     states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch(beta(self.iterations))
                     priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, weights)
                     self.replay_buffer.update(indices, priorities.numpy())

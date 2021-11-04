@@ -8,8 +8,9 @@ class ReplayBuffer:
         self.size = 0
         self.tree_size = 0
         self.next = 0
+        self.max_priority = 0.1
         self.data = [None] * capacity
-        self.tree = [None] * 2*capacity - 1
+        self.tree = [None] * (2*capacity - 1)
         self.rng = np.random.default_rng()
 
     def _propagate(self, index, delta):
@@ -20,11 +21,11 @@ class ReplayBuffer:
     def _insert_tree(self, value, data_index):
         index = self.tree_size
 
-        if self.tree_size > 0:
+        if index > 0:
             parent = (index - 1) // 2
 
             # Move parent to index and put our new value in index+1
-            self.tree[index] = self.tree[parent]
+            self.tree[index] = [self.tree[parent][0], self.tree[parent][1]]
             self.tree[index + 1] = [value, data_index]
 
             # Update indices in data table so they point into tree correctly
@@ -38,9 +39,7 @@ class ReplayBuffer:
             self.tree_size += 1
 
     def add(self, experience):
-        priority = 0
-        if self.size > 0:
-            priority = self.tree[0][0]
+        priority = self.max_priority
 
         if self.size < self.capacity:
             self.data[self.next] = experience + [0]
@@ -55,16 +54,17 @@ class ReplayBuffer:
 
         self.next = (self.next + 1) % self.capacity
 
-        assert self.is_sumtree()
+        #assert self.is_sumtree()
 
     def update(self, indices, priorities):
-        priorities = np.power(priorities + 0.0001, self.alpha)
+        priorities = np.power(priorities + 0.1, self.alpha)
+        self.max_priority = max(self.max_priority, np.max(priorities))
         for (index, priority) in zip(indices, priorities):
             tree_index = self.data[index][5]
             old = self.tree[tree_index][0]
             self._propagate(tree_index, priority - old)
 
-        assert self.is_sumtree()
+        #assert self.is_sumtree()
 
     def is_sumtree(self):
         for i in range(0, self.tree_size):
