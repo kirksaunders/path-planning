@@ -1,6 +1,3 @@
-from ddqn import DDQN
-from ddqn import state_to_tf_input
-from env import PathPlanningEnv
 import numpy as np
 import sys
 import os
@@ -8,6 +5,11 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 import tkinter as tk
 from time import sleep
+
+from ddqn import DDQN, state_to_tf_input
+from env import PathPlanningEnv
+from uniform_replay_buffer import *
+from proportional_replay_buffer import *
 
 DIM = 5
 
@@ -72,6 +74,8 @@ def train(model_file = None):
     tk_root = tk.Tk()
 
     max_episode_steps = 200
+    batch_size = 64
+
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
     exploration_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.5, max_episode_steps, 0.9995)
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
@@ -81,8 +85,11 @@ def train(model_file = None):
     else:
         model = tf.keras.models.load_model(model_file)
 
+    #rb = UniformReplayBuffer(1000000, batch_size)
+    rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
+
     env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
-    agent = DDQN(env, model, 1000000, 64, 0.6)
+    agent = DDQN(env, model, rb, batch_size)
     agent.train(0.999, exploration_rate, max_episode_steps, 250, beta)
 
 def evaluate(model_file):

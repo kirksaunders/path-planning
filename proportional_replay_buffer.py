@@ -1,14 +1,18 @@
 import numpy as np
 
-class ReplayBuffer:
-    def __init__(self, capacity, batch_size, alpha):
+from prioritized_replay_buffer import *
+
+class ProportionalReplayBuffer(PrioritizedReplayBuffer):
+    def __init__(self, capacity, batch_size, alpha, beta):
         self.capacity = capacity
         self.batch_size = batch_size
         self.alpha = alpha
+        self.beta = beta
         self.size = 0
         self.tree_size = 0
         self.next = 0
         self.max_priority = 0.001
+        self.iterations = 0
         self.data = [None] * capacity
         self.tree = [None] * (2*capacity - 1)
         self.rng = np.random.default_rng()
@@ -54,7 +58,7 @@ class ReplayBuffer:
 
         self.next = (self.next + 1) % self.capacity
 
-        #assert self.is_sumtree()
+        #assert self._is_sumtree()
 
     def update(self, indices, priorities):
         priorities = np.power(priorities, self.alpha) + 0.001
@@ -64,9 +68,9 @@ class ReplayBuffer:
             old = self.tree[tree_index][0]
             self._propagate(tree_index, priority - old)
 
-        #assert self.is_sumtree()
+        #assert self._is_sumtree()
 
-    def is_sumtree(self):
+    def _is_sumtree(self):
         for i in range(0, self.tree_size):
             left_child = 2*i + 1
             right_child = left_child + 1
@@ -103,8 +107,11 @@ class ReplayBuffer:
                 index = right_child
                 val -= self.tree[left_child][0]
 
-    def mini_batch(self, beta):
+    def mini_batch(self):
         assert self.size >= self.batch_size
+
+        beta = self.beta(self.iterations)
+        self.iterations += 1
 
         total_sum = self.tree[0][0]
 
