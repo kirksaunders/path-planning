@@ -80,7 +80,7 @@ class DDQN:
                         self.replay_buffer.update(indices, priorities.numpy())
                     else:
                         states, actions, rewards, terminals, next_states = self.replay_buffer.mini_batch()
-                        priorities = self.train_step(gamma, states, actions, rewards, terminals, next_states, weights)
+                        self.train_step(gamma, states, actions, rewards, terminals, next_states)
 
                 state = next_state
 
