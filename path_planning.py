@@ -90,7 +90,7 @@ def train(model_file = None):
 
     env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
     agent = DDQN(env, model, rb, batch_size)
-    agent.train(0.999, exploration_rate, max_episode_steps, 250, beta)
+    agent.train(0.999, exploration_rate, max_episode_steps, 250)
 
 def evaluate(model_file):
     tk_root = tk.Tk()
