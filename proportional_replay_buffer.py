@@ -121,14 +121,14 @@ class ProportionalReplayBuffer(PrioritizedReplayBuffer):
         weights = np.asarray([c[0] for c in chosen], dtype=np.float32) / total_sum
         weights = np.power(weights * self.size, -beta)
         weights = weights / np.max(weights)
-        weights = weights.astype(np.float32)
+        weights = weights.astype(np.float32).reshape((self.batch_size, 1))
 
         indices = [c[1] for c in chosen]
         data = [self.data[i] for i in indices]
 
-        actions = np.asarray([sample[1] for sample in data], dtype=np.int32)
-        rewards = np.asarray([sample[2] for sample in data], dtype=np.float32)
-        terminals = np.asarray([sample[3] for sample in data], dtype=bool)
+        actions = np.asarray([sample[1] for sample in data], dtype=np.float32)
+        rewards = np.asarray([sample[2] for sample in data], dtype=np.float32).reshape((self.batch_size, 1))
+        terminals = np.asarray([sample[3] for sample in data], dtype=bool).reshape((self.batch_size, 1))
 
         states = [None] * len(data[0][0])
         next_states = [None] * len(data[0][0])

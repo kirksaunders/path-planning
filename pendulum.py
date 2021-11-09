@@ -5,45 +5,53 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 
 from ddpg import *
+from proportional_replay_buffer import *
 from uniform_replay_buffer import *
 
 def create_actor_model(lr):
-    initializer = tf.keras.initializers.VarianceScaling(2.0)
+    last_init = tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
 
-    input = tf.keras.layers.Dense(16, input_dim = 3, activation = "relu", kernel_initializer=initializer)
-    x = tf.keras.layers.Dense(1, activation = "tanh")(input)
+    input = tf.keras.layers.Input(shape=(3,))
+    x = tf.keras.layers.Dense(256, activation = "relu")(input)
+    x = tf.keras.layers.Dense(256, activation = "relu")(x)
+    x = tf.keras.layers.Dense(1, activation = "tanh", kernel_initializer=last_init)(x)
     output = x * 2.0
 
     model = tf.keras.models.Model(input, output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(lr, clipnorm=1.0)
+        optimizer = tf.keras.optimizers.Adam(lr)
     )
+
+    return model
 
 def create_critic_model(lr):
-    initializer = tf.keras.initializers.VarianceScaling(2.0)
+    state_input = tf.keras.layers.Input(shape=(3,))
+    x = tf.keras.layers.Dense(16, activation = "relu")(state_input)
+    state_output = tf.keras.layers.Dense(32, activation = "relu")(x)
 
-    state_input = tf.keras.layers.Dense(16, input_dim = 3, activation = "relu", kernel_initializer=initializer)
-    state_output = tf.keras.layers.Dense(1, activation = "tanh")(state_input)
+    action_input = tf.keras.layers.Input(shape=(1,))
+    action_output = tf.keras.layers.Dense(32, activation = "relu")(action_input)
 
-    action_inout = tf.keras.layers.Dense(16, input_dim = 1, activation = "relu", kernel_initializer=initializer)
+    x = tf.keras.layers.concatenate([state_output, action_output])
+    x = tf.keras.layers.Dense(256, activation = "relu")(x)
+    x = tf.keras.layers.Dense(256, activation = "relu")(x)
+    output = tf.keras.layers.Dense(1, activation = "linear")(x)
 
-    x = tf.keras.layers.concatenate([state_output, action_inout])
-    x = tf.keras.layers.Dense(16, activation = "relu", kernel_initializer=initializer)
-    output = tf.keras.layers.Dense(1, activation = "linear")
-
-    model = tf.keras.models.Model([state_input, action_inout], output)
+    model = tf.keras.models.Model([state_input, action_input], output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(lr, clipnorm=1.0)
+        optimizer = tf.keras.optimizers.Adam(lr)
     )
+
+    return model
 
 class PendulumEnvWrapper:
     def __init__(self):
         self.env = PendulumEnv()
 
     def reset(self, random=True):
-        state = self.env.reset()
+        state = self.env.reset().reshape((3,1))
         return [state]
 
     def step(self, action):
@@ -87,17 +95,17 @@ def train():
 
     #learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
     action_noise = OUActionNoise(np.zeros(1), 0.2 * np.ones(1))
-    #beta = lambda it: min(1.0, 0.5 + it*0.00001)
+    beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
     actor = create_actor_model(0.001)
     critic = create_critic_model(0.002)
 
-    rb = UniformReplayBuffer(1000000, batch_size)
-    #rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
+    #rb = UniformReplayBuffer(1000000, batch_size)
+    rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
     env = PendulumEnvWrapper()
     agent = DDPG(env, actor, critic, rb)
-    agent.train(0.999, action_noise, max_episode_steps, 0.005, 0.005, 1)
+    agent.train(0.99, action_noise, max_episode_steps, 0.005, 0.005, 1)
 
 if __name__ == "__main__":
     train()

@@ -22,15 +22,15 @@ class DDQN:
 
     @tf.function
     def train_step(self, gamma, states, actions, rewards, terminals, next_states):
-        actions_one_hot = tf.one_hot(actions, self.env.num_actions)
+        actions_one_hot = tf.one_hot(tf.cast(actions, tf.int32), self.env.num_actions)
         q_next_argmax = tf.argmax(self.q(next_states, training=True), axis=1)
         q_next_actions = tf.one_hot(q_next_argmax, self.env.num_actions)
-        q_next_values = tf.reduce_sum(tf.multiply(self.q_target(next_states, training=True), q_next_actions), axis=1)
+        q_next_values = tf.reduce_sum(tf.multiply(self.q_target(next_states, training=True), q_next_actions), axis=1, keepdims=True)
 
         q_target_values = rewards + tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32)) * gamma
 
         with tf.GradientTape() as tape:
-            q_values = tf.reduce_sum(tf.multiply(self.q(states, training=True), actions_one_hot), axis=1)
+            q_values = tf.reduce_sum(tf.multiply(self.q(states, training=True), actions_one_hot), axis=1, keepdims=True)
             td_error = q_target_values - q_values
             loss = tf.reduce_mean(tf.square(td_error))
 
@@ -39,22 +39,22 @@ class DDQN:
     
     @tf.function
     def train_step_per(self, gamma, states, actions, rewards, terminals, next_states, weights):
-        actions_one_hot = tf.one_hot(actions, self.env.num_actions)
+        actions_one_hot = tf.one_hot(tf.cast(actions, tf.int32), self.env.num_actions)
         q_next_argmax = tf.argmax(self.q(next_states, training=True), axis=1)
         q_next_actions = tf.one_hot(q_next_argmax, self.env.num_actions)
-        q_next_values = tf.reduce_sum(tf.multiply(self.q_target(next_states, training=True), q_next_actions), axis=1)
+        q_next_values = tf.reduce_sum(tf.multiply(self.q_target(next_states, training=True), q_next_actions), axis=1, keepdims=True)
 
         q_target_values = rewards + tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32)) * gamma
 
         with tf.GradientTape() as tape:
-            q_values = tf.reduce_sum(tf.multiply(self.q(states, training=True), actions_one_hot), axis=1)
+            q_values = tf.reduce_sum(tf.multiply(self.q(states, training=True), actions_one_hot), axis=1, keepdims=True)
             td_error = q_target_values - q_values
             loss = tf.multiply(tf.reduce_mean(tf.square(td_error)), weights)
 
         gradients = tape.gradient(loss, self.q.trainable_variables)
         self.q.optimizer.apply_gradients(zip(gradients, self.q.trainable_variables))
 
-        return tf.abs(td_error)
+        return tf.squeeze(tf.abs(td_error))
 
     def train(self, gamma, epsilon, episode_step_limit, copy_interval, learn_interval):
         total_rewards = [None] * 100

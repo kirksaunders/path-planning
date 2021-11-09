@@ -23,9 +23,9 @@ class UniformReplayBuffer(ReplayBuffer):
         indices = self.rng.choice(self.size, self.batch_size, replace=False)
         data = [self.data[i] for i in indices]
 
-        actions = np.asarray([sample[1] for sample in data], dtype=np.int32)
-        rewards = np.asarray([sample[2] for sample in data], dtype=np.float32)
-        terminals = np.asarray([sample[3] for sample in data], dtype=bool)
+        actions = np.asarray([sample[1] for sample in data], dtype=np.float32)
+        rewards = np.asarray([sample[2] for sample in data], dtype=np.float32).reshape((self.batch_size, 1))
+        terminals = np.asarray([sample[3] for sample in data], dtype=bool).reshape((self.batch_size, 1))
 
         states = [None] * len(data[0][0])
         next_states = [None] * len(data[0][0])
