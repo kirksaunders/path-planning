@@ -10,14 +10,13 @@ def state_to_tf_input(state):
     return [x.reshape((1, *(x.shape))) for x in state]
 
 class DDQN:
-    def __init__(self, env, q, replay_buffer, batch_size):
+    def __init__(self, env, q, replay_buffer):
         self.env = env
         self.q = q
         self.q_target = tf.keras.models.clone_model(q)
         self.q_target.set_weights(q.get_weights())
         self.replay_buffer = replay_buffer
         self.use_per = isinstance(self.replay_buffer, PrioritizedReplayBuffer)
-        self.batch_size = batch_size
         self.iterations = 0
         self.episodes = 0
 
@@ -57,7 +56,7 @@ class DDQN:
 
         return tf.abs(td_error)
 
-    def train(self, gamma, epsilon, episode_step_limit, copy_interval):
+    def train(self, gamma, epsilon, episode_step_limit, copy_interval, learn_interval):
         total_rewards = [None] * 100
         while True:
             state = self.env.reset(random=True)
@@ -73,7 +72,7 @@ class DDQN:
                 total_reward += reward
                 self.replay_buffer.add([state, action, reward, terminal, next_state])
 
-                if self.replay_buffer.size >= self.batch_size and self.iterations % 4 == 0:
+                if self.replay_buffer.size >= self.replay_buffer.batch_size and self.iterations % learn_interval == 0:
                     if self.use_per:
                         states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch()
                         priorities = self.train_step_per(gamma, states, actions, rewards, terminals, next_states, weights)

@@ -89,8 +89,8 @@ def train(model_file = None):
     #rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
     env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
-    agent = DDQN(env, model, rb, batch_size)
-    agent.train(0.999, exploration_rate, max_episode_steps, 250)
+    agent = DDQN(env, model, rb)
+    agent.train(0.999, exploration_rate, max_episode_steps, 250, 4)
 
 def evaluate(model_file):
     tk_root = tk.Tk()
