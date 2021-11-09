@@ -85,8 +85,8 @@ def train(model_file = None):
     else:
         model = tf.keras.models.load_model(model_file)
 
-    rb = UniformReplayBuffer(1000000, batch_size)
-    #rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
+    #rb = UniformReplayBuffer(1000000, batch_size)
+    rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
     env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
     agent = DDQN(env, model, rb)

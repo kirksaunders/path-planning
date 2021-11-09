@@ -61,7 +61,7 @@ class DDPG:
         with tf.GradientTape() as tape:
             q_values = self.critic([states, actions], training=True)
             td_error = y - q_values
-            loss = tf.multiply(tf.reduce_mean(tf.square(td_error)), weights)
+            loss = tf.reduce_mean(tf.multiply(tf.square(td_error), weights))
 
         gradients = tape.gradient(loss, self.critic.trainable_variables)
         self.critic.optimizer.apply_gradients(zip(gradients, self.critic.trainable_variables))
