@@ -145,7 +145,6 @@ def evaluate(model_file):
 
     tk_root.mainloop()
 
-
 if __name__=='__main__':
     if len(sys.argv) >= 3 and sys.argv[1] == "evaluate":
         evaluate(sys.argv[2])

@@ -93,12 +93,12 @@ def train():
     max_episode_steps = 200
     batch_size = 64
 
-    #learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
+    learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.99)
     action_noise = OUActionNoise(np.zeros(1), 0.2 * np.ones(1))
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
-    actor = create_actor_model(0.001)
-    critic = create_critic_model(0.002)
+    actor = create_actor_model(learning_rate)
+    critic = create_critic_model(learning_rate)
 
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
