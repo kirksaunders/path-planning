@@ -19,6 +19,7 @@ class ContinuousPathPlanningEnv:
         self.goal = np.array([0, 0])
         self.path = []
 
+        self.rng = np.random.default_rng()
         self.draw_size = 15
         self.dim = dim
 
@@ -33,32 +34,61 @@ class ContinuousPathPlanningEnv:
         else:
             self.canvas = None
 
+    def _is_free(self, pos):
+        grid_pos = np.floor(pos).astype(np.int32)
+
+        # Ensure there are two spaces free around pos
+        free = True
+        for dy in range(-2, 3):
+            y = grid_pos[1] + dy
+            if y < 0 or y >= self.grid_height:
+                free = False
+                break
+
+            for dx in range(-2, 3):
+                x = grid_pos[0] + dx
+                if x < 0 or x >= self.grid_width:
+                    free = False
+                    break
+
+                if self.grid[y, x] == 1:
+                    free = False
+                    break
+
+            if not free:
+                break
+
+        return free
+
     def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=False):
         if random:
             while True:
-                self.pos = np.array([np.random.choice(self.grid_width), np.random.choice(self.grid_height)])
-                if self.grid[self.pos[1], self.pos[0]] == 0:
+                self.pos = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
+                
+                if self._is_free(self.pos):
                     break
 
             while True:
-                self.goal = np.array([np.random.choice(self.grid_width), np.random.choice(self.grid_height)])
-                if self.grid[self.goal[1], self.goal[0]] == 0 and not np.array_equal(self.goal, self.pos):
+                self.goal = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
+                
+                if self._is_free(self.goal):
                     break
         else:
             self.pos = start
             self.goal = goal
 
+        #self.pos = np.array([43.5, 26.5])
+        #self.goal = np.array([5.5, 17.5])
+
         self.start = self.pos
-        self.pos = self.pos + 0.5
         self.path = []
 
         return self.get_state()
 
     # Source: https://tavianator.com/2011/ray_box.html
     def _intersection(self, pos, dir, dir_norm, dir_inv, grid_pos):
-        # Notice how we slightly increase the size of the grid space
-        lx = np.array([grid_pos[0] - 0.1, grid_pos[0] + 1.1])
-        ly = np.array([grid_pos[1] - 0.1, grid_pos[1] + 1.1])
+        lx = np.array([grid_pos[0], grid_pos[0] + 1.0])
+        ly = np.array([grid_pos[1], grid_pos[1] + 1.0])
 
         tx = (lx - pos[0]) * dir_inv[0]
 
@@ -171,19 +201,46 @@ class ContinuousPathPlanningEnv:
 
         return not hit
 
+    # Note: this function is only an estimate, not exact
+    def _wall_distance_heuristic(self, pos):
+        grid_pos = np.floor(pos).astype(np.int32)
+
+        min_dist = None
+        for dy in range(-5, 6):
+            y = grid_pos[1] + dy
+            for dx in range(-5, 6):
+                x = grid_pos[0] + dx
+
+                # If space is a wall
+                if (
+                    x < 0 or x >= self.grid_width or
+                    y < 0 or y >= self.grid_height or
+                    self.grid[y, x] == 1
+                ):
+                    dist = np.linalg.norm((np.array([x, y]) + 0.5) - pos) - 0.5
+                    if min_dist is None or dist < min_dist:
+                        min_dist = dist
+
+        if min_dist is None:
+            return 0
+
+        #return -1.0 / max(min_dist, 0.1)
+        return -2.0 * max(min_dist, 0.1) ** -0.75
+
     def step(self, action):
         action = np.squeeze(action)
         result = self._move(action)
 
-        dist = np.linalg.norm((self.goal + 0.5) - self.pos)
+        dist = np.linalg.norm(self.goal - self.pos)
         terminal = dist < 0.5
-        reward = -dist * 0.1
+        reward = -dist * 0.25
         if terminal:
-            reward += 100
+            reward += 10000
         #else:
         #    reward -= 1
-        if result == False:
-            reward -= 5
+        #if result == False:
+        #    reward -= 5
+        reward += self._wall_distance_heuristic(self.pos)
 
         #dist = np.linalg.norm(self.goal - self.pos)
         #reward = -0.01 * dist * dist - 5
@@ -237,7 +294,7 @@ class ContinuousPathPlanningEnv:
                 # Apply interpolation coefficients on these spaces
                 state[dy+self.dim, dx+self.dim, 0] = np.sum(np.multiply(spaces, interp))
 
-        dir = (self.goal + 0.5) - self.pos
+        dir = self.goal - self.pos
         #norm = np.linalg.norm(dir)
         #if norm == 0:
         #    norm = 1
@@ -291,30 +348,39 @@ class ContinuousPathPlanningEnv:
 
     def _display_tk(self):
         self.canvas.delete("all")
+
+        # Draw grid spaces
         for y in range(0, self.grid_height):
             for x in range(0, self.grid_width):
-                if x == self.goal[0] and y == self.goal[1]:
-                    color = "green"
-                elif x == self.start[0] and y == self.start[1]:
-                    color = "red"
-                elif self.grid[y, x] == 1:
-                    color = "#101010"
-                else:
-                    color = "white"
+                color = "#101010" if self.grid[y, x] == 1 else "white"
 
                 self.canvas.create_rectangle(
                     x*self.draw_size, y*self.draw_size,
                     (x+1)*self.draw_size + 1, (y+1)*self.draw_size + 1,
                     fill=color
                 )
+
+        # Draw start
+        ul = (self.start - 0.4) * self.draw_size
+        lr = (self.start + 0.4) * self.draw_size
+        self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="red")
+
+        # Draw goal
+        ul = (self.goal - 0.4) * self.draw_size
+        lr = (self.goal + 0.4) * self.draw_size
+        self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="green")
+        
+        # Draw path taken
         for p in self.path:
             ul = (p - 0.25) * self.draw_size
             lr = (p + 0.25) * self.draw_size
             self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="cyan")
         
+        # Draw current position
         ul = (self.pos - 0.4) * self.draw_size
         lr = (self.pos + 0.4) * self.draw_size
         self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="orange")
+
         self.tk_root.update()
 
     def display(self):
