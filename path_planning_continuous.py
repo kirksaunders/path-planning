@@ -68,6 +68,8 @@ def create_critic_model(lr):
     cnn = create_cnn()
     dnn = create_dnn()
 
+    initializer = tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
+
     x = tf.keras.layers.concatenate([cnn.output, dnn.output])
     state_output = tf.keras.layers.Dense(32, activation = "relu")(x)
     
@@ -76,7 +78,7 @@ def create_critic_model(lr):
 
     x = tf.keras.layers.concatenate([state_output, action_output])
     x = tf.keras.layers.Dense(64, activation = "relu")(x)
-    output = tf.keras.layers.Dense(1, activation = "linear")(x)
+    output = tf.keras.layers.Dense(1, activation = "linear", kernel_initializer=initializer)(x)
 
     model = tf.keras.models.Model([[cnn.input, dnn.input], action_input], output)
 
@@ -117,16 +119,19 @@ def train(model_file = None):
     tk_root = tk.Tk()
 
     max_episode_steps = 200
-    batch_size = 64
+    batch_size = 16
 
-    learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
+    learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.999)
+    learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.999)
     action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
-    tau = 0.005
+    #rng = np.random.default_rng()
+    #action_noise = lambda x: 2*(rng.random() - 0.5) * (rng.random() ** 20)
+    tau = 0.001
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
     if model_file == None:
-        actor = create_actor_model(learning_rate)
-        critic = create_critic_model(learning_rate)
+        actor = create_actor_model(learning_rate_actor)
+        critic = create_critic_model(learning_rate_critic)
     else:
         actor = tf.keras.models.load_model(model_file + "_actor.h5")
         critic = tf.keras.models.load_model(model_file + "_critic.h5")
@@ -137,12 +142,12 @@ def train(model_file = None):
     env = ContinuousPathPlanningEnv("grid2.bmp", DIM, tk_root)
     agent = DDPG(env, actor, critic, rb)
 
-    agent.train(0.999, action_noise, max_episode_steps, tau, tau, 4)
+    agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1)
 
 def evaluate(model_file):
     tk_root = tk.Tk()
 
-    max_episode_steps = 100
+    max_episode_steps = 200
 
     actor = tf.keras.models.load_model(model_file + "_actor.h5")
 
@@ -172,8 +177,8 @@ def evaluate(model_file):
     def on_click_left(event):
         nonlocal start
 
-        x = event.x // env.draw_size
-        y = event.y // env.draw_size
+        x = event.x / env.draw_size
+        y = event.y / env.draw_size
 
         start = np.array([x, y])
         run()
@@ -181,8 +186,8 @@ def evaluate(model_file):
     def on_click_right(event):
         nonlocal end
 
-        x = event.x // env.draw_size
-        y = event.y // env.draw_size
+        x = event.x / env.draw_size
+        y = event.y / env.draw_size
 
         end = np.array([x, y])
         run()

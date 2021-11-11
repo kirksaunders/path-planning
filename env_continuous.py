@@ -20,7 +20,7 @@ class ContinuousPathPlanningEnv:
         self.path = []
 
         self.rng = np.random.default_rng()
-        self.draw_size = 15
+        self.draw_size = 10
         self.dim = dim
 
         if tkinter_root != None:
@@ -233,14 +233,21 @@ class ContinuousPathPlanningEnv:
 
         dist = np.linalg.norm(self.goal - self.pos)
         terminal = dist < 0.5
-        reward = -dist * 0.25
-        if terminal:
-            reward += 10000
+        #reward = -dist * 0.25
+        #if terminal:
+        #    reward += 10000
         #else:
         #    reward -= 1
         #if result == False:
         #    reward -= 5
-        reward += self._wall_distance_heuristic(self.pos)
+        #reward += self._wall_distance_heuristic(self.pos)
+
+        #reward = reward / 3000.0
+
+        if terminal:
+            reward = 5
+        else:
+            reward = -1
 
         #dist = np.linalg.norm(self.goal - self.pos)
         #reward = -0.01 * dist * dist - 5
@@ -295,10 +302,10 @@ class ContinuousPathPlanningEnv:
                 state[dy+self.dim, dx+self.dim, 0] = np.sum(np.multiply(spaces, interp))
 
         dir = self.goal - self.pos
-        #norm = np.linalg.norm(dir)
-        #if norm == 0:
-        #    norm = 1
-        #dir = dir / norm
+        norm = np.linalg.norm(dir)
+        if norm == 0:
+            norm = 1
+        dir = dir / norm
 
         return [state, dir]
 
