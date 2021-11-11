@@ -237,7 +237,7 @@ class ContinuousPathPlanningEnv:
                 # Apply interpolation coefficients on these spaces
                 state[dy+self.dim, dx+self.dim, 0] = np.sum(np.multiply(spaces, interp))
 
-        dir = self.goal - self.pos
+        dir = (self.goal + 0.5) - self.pos
         #norm = np.linalg.norm(dir)
         #if norm == 0:
         #    norm = 1

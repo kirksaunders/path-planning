@@ -131,19 +131,11 @@ def train(model_file = None):
         actor = tf.keras.models.load_model(model_file + "_actor.h5")
         critic = tf.keras.models.load_model(model_file + "_critic.h5")
 
-    rb = UniformReplayBuffer(1000000, batch_size)
-    #rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
+    #rb = UniformReplayBuffer(1000000, batch_size)
+    rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
     env = ContinuousPathPlanningEnv("grid2.bmp", DIM, tk_root)
     agent = DDPG(env, actor, critic, rb)
-
-    """ env.reset(random=True)
-    state = state_to_tf_input(env.get_state())
-    print(state)
-    action = actor(state).numpy()
-    result = critic([state, action])
-    print(result)
-    exit(0) """
 
     agent.train(0.999, action_noise, max_episode_steps, tau, tau, 4)
 
