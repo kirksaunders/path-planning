@@ -14,7 +14,8 @@ def on_click_left(event):
     x = event.x / env.draw_size
     y = event.y / env.draw_size
     
-    state, _, _ = env.step(np.array([x, y]) - env.pos)
+    state, reward, terminal = env.step(np.array([x, y]) - env.pos)
+    print(reward, terminal)
     with Image.new(mode="RGB", size=((2*DIM+1)*25, (2*DIM+1)*25)) as img:
         draw = ImageDraw.Draw(img)
         

@@ -147,12 +147,12 @@ class ContinuousPathPlanningEnv:
         self.pos = new_pos
         self.path.append(new_pos)
 
-        return hit
+        return not hit
 
     def step(self, action):
         result = self._move(action)
 
-        terminal = np.linalg.norm(self.goal - self.pos) < 0.25
+        terminal = np.linalg.norm((self.goal + 0.5) - self.pos) < 0.5
         reward = 0
         if terminal:
             reward += 1
@@ -283,9 +283,14 @@ class ContinuousPathPlanningEnv:
                     (x+1)*self.draw_size + 1, (y+1)*self.draw_size + 1,
                     fill=color
                 )
-        ul = (self.pos - 0.25) * self.draw_size
-        lr = (self.pos + 0.25) * self.draw_size
-        self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="cyan")
+        for p in self.path:
+            ul = (p - 0.25) * self.draw_size
+            lr = (p + 0.25) * self.draw_size
+            self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="cyan")
+        
+        ul = (self.pos - 0.4) * self.draw_size
+        lr = (self.pos + 0.4) * self.draw_size
+        self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="orange")
         self.tk_root.update()
 
     def display(self):
