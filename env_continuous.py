@@ -56,8 +56,9 @@ class ContinuousPathPlanningEnv:
 
     # Source: https://tavianator.com/2011/ray_box.html
     def _intersection(self, pos, dir, dir_norm, dir_inv, grid_pos):
-        lx = np.array([grid_pos[0], grid_pos[0] + 1])
-        ly = np.array([grid_pos[1], grid_pos[1] + 1])
+        # Notice how we slightly increase the size of the grid space
+        lx = np.array([grid_pos[0] - 0.1, grid_pos[0] + 1.1])
+        ly = np.array([grid_pos[1] - 0.1, grid_pos[1] + 1.1])
 
         tx = (lx - pos[0]) * dir_inv[0]
 
@@ -72,15 +73,13 @@ class ContinuousPathPlanningEnv:
         if tmax < tmin or tmin > 1 or tmin < 0:
             return None
 
-        # Ensure we stay at least 0.1 distance away from wall
-        dist = tmin - 0.1 / dir_norm
-        return pos + dir * dist
+        return pos + dir * tmin
 
     def _raycast(self, pos, dir):
         dir_norm = np.linalg.norm(dir)
 
         # Just return existing pos if dir's norm is small enough
-        if abs(dir_norm) < 0.000001:
+        if dir_norm < 0.000001:
             return pos, False
 
         # Pre-calculate dir_inv to save some time
@@ -144,22 +143,47 @@ class ContinuousPathPlanningEnv:
 
     def _move(self, dir):
         new_pos, hit = self._raycast(self.pos, dir)
+
+        # Raycasting can miss some edge cases, so let's do a brute force collision test
+        dir = new_pos - self.pos
+        dir_norm = np.linalg.norm(dir)
+        if dir_norm > 0.000001:
+            dir_unit = dir / dir_norm
+            dist = 0
+            new_pos = self.pos
+            while dist < dir_norm:
+                dist = min(dist + 0.25, dir_norm)
+                pos = self.pos + dir_unit * dist
+                grid_pos = np.floor(pos).astype(np.int32)
+
+                if (
+                    grid_pos[0] < 0 or grid_pos[0] >= self.grid_width or
+                    grid_pos[1] < 0 or grid_pos[1] >= self.grid_height or
+                    self.grid[grid_pos[1], grid_pos[0]] == 1
+                ):
+                    hit = True
+                    break
+
+                new_pos = pos
+
         self.pos = new_pos
         self.path.append(new_pos)
 
         return not hit
 
     def step(self, action):
+        action = np.squeeze(action)
         result = self._move(action)
 
-        terminal = np.linalg.norm((self.goal + 0.5) - self.pos) < 0.5
-        reward = 0
+        dist = np.linalg.norm((self.goal + 0.5) - self.pos)
+        terminal = dist < 0.5
+        reward = -dist * 0.1
         if terminal:
-            reward += 1
-        else:
-            reward -= 1
+            reward += 100
+        #else:
+        #    reward -= 1
         if result == False:
-            reward -= 1
+            reward -= 5
 
         #dist = np.linalg.norm(self.goal - self.pos)
         #reward = -0.01 * dist * dist - 5

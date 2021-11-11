@@ -54,7 +54,7 @@ def create_actor_model(lr):
     input = tf.keras.layers.concatenate([cnn.output, dnn.output])
     x = tf.keras.layers.Dense(32, activation = "relu")(input)
     x = tf.keras.layers.Dense(2, activation = "tanh", kernel_initializer=initializer)(x)
-    output = x * 2.0 # Allow displacement distance of 2 in each dimension each step
+    output = x * 1.0 # Allow displacement distance of 2 in each dimension each step
 
     model = tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
@@ -120,7 +120,7 @@ def train(model_file = None):
     batch_size = 64
 
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.9995)
-    action_noise = OUActionNoise(np.zeros(1), 0.2 * np.ones(1))
+    action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
     tau = 0.005
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
@@ -131,11 +131,20 @@ def train(model_file = None):
         actor = tf.keras.models.load_model(model_file + "_actor.h5")
         critic = tf.keras.models.load_model(model_file + "_critic.h5")
 
-    #rb = UniformReplayBuffer(1000000, batch_size)
-    rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
+    rb = UniformReplayBuffer(1000000, batch_size)
+    #rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
     env = ContinuousPathPlanningEnv("grid2.bmp", DIM, tk_root)
     agent = DDPG(env, actor, critic, rb)
+
+    """ env.reset(random=True)
+    state = state_to_tf_input(env.get_state())
+    print(state)
+    action = actor(state).numpy()
+    result = critic([state, action])
+    print(result)
+    exit(0) """
+
     agent.train(0.999, action_noise, max_episode_steps, tau, tau, 4)
 
 def evaluate(model_file):

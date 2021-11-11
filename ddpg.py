@@ -53,7 +53,7 @@ class DDPG:
 
     @tf.function
     def train_step_per(self, gamma, states, actions, rewards, terminals, next_states, weights):
-        next_actions = self.actor_target(next_states, training=True)
+        next_actions = tf.squeeze(self.actor_target(next_states, training=True))
         q_next_values = self.critic_target([next_states, next_actions], training=True)
         y = rewards + gamma * tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32))
 
@@ -68,7 +68,7 @@ class DDPG:
 
         # Perform gradient ascent on actor
         with tf.GradientTape() as tape:
-            actions = self.actor(states, training=True)
+            actions = tf.squeeze(self.actor(states, training=True))
             q_values = self.critic([states, actions], training=True)
             # Negative for ascent rather than descent
             loss = -tf.reduce_mean(q_values)
@@ -91,7 +91,8 @@ class DDPG:
             for t in range(0, episode_step_limit):
                 self.iterations += 1
 
-                action = self.actor(state_to_tf_input(state)) + action_noise(self.iterations)
+                action = self.actor(state_to_tf_input(state)).numpy() + action_noise(self.iterations)
+                action = np.squeeze(action)
                 next_state, reward, terminal = self.env.step(action)
                 total_reward += reward
                 self.replay_buffer.add([state, action, reward, terminal, next_state])
@@ -117,7 +118,7 @@ class DDPG:
             total_rewards[self.episodes % 40] = total_reward
             self.episodes += 1
 
-            if self.episodes % 1 == 0:
+            if self.episodes % 5 == 0:
                 r = 0.0
                 c = 0
                 for i in range(0, min(40, self.episodes)):
@@ -126,14 +127,14 @@ class DDPG:
                 print("Episode {}, learning rate: {}, average reward: {}".format(
                     self.episodes, 0, r / c))
 
-                #self.actor.save("results/ep{}_actor.h5".format(self.episodes))
-                #self.critic.save("results/ep{}_critic.h5".format(self.episodes))
+                self.actor.save("results/ep{}_actor.h5".format(self.episodes))
+                self.critic.save("results/ep{}_critic.h5".format(self.episodes))
 
-                """ state = self.env.reset(random=True)
+                state = self.env.reset(random=True)
                 for t in range(0, episode_step_limit):
-                    action = np.argmax(self.q(state_to_tf_input(state), training=False))
+                    action = self.actor(state_to_tf_input(state), training=False)
                     next_state, reward, terminal = self.env.step(action)
                     if terminal:
                         break
                     state = next_state
-                self.env.display() """
+                self.env.display()

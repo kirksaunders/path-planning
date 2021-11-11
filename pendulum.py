@@ -51,11 +51,14 @@ class PendulumEnvWrapper:
         self.env = PendulumEnv()
 
     def reset(self, random=True):
-        state = self.env.reset().reshape((3,1))
+        state = self.env.reset()
+        state = np.squeeze(state)
         return [state]
 
     def step(self, action):
+        action = np.array([action])
         state, reward, terminal, _ = self.env.step(action)
+        state = np.squeeze(state)
         return [state], reward, terminal
 
     def render(self):
