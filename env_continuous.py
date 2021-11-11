@@ -222,7 +222,7 @@ class ContinuousPathPlanningEnv:
                         min_dist = dist
 
         if min_dist is None:
-            return 0
+            min_dist = 6.0
 
         #return -1.0 / max(min_dist, 0.1)
         return -2.0 * max(min_dist, 0.1) ** -0.75
