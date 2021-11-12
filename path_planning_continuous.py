@@ -8,6 +8,7 @@ from time import sleep
 
 from ddpg import *
 from env_continuous import *
+from td3 import *
 from uniform_replay_buffer import *
 from proportional_replay_buffer import *
 
@@ -118,14 +119,14 @@ class OUActionNoise:
 def train(model_file = None):
     tk_root = tk.Tk()
 
-    max_episode_steps = 200
+    max_episode_steps = 400
     batch_size = 16
 
     learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.999)
     learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.999)
-    action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
-    #rng = np.random.default_rng()
-    #action_noise = lambda x: 2*(rng.random() - 0.5) * (rng.random() ** 20)
+    #action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
+    rng = np.random.default_rng()
+    action_noise = lambda x: 2*(rng.random() - 0.5) * (rng.random() ** 20)
     tau = 0.001
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
@@ -139,15 +140,17 @@ def train(model_file = None):
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = ContinuousPathPlanningEnv("grid2.bmp", DIM, tk_root)
-    agent = DDPG(env, actor, critic, rb)
+    env = ContinuousPathPlanningEnv("grid3.bmp", DIM, tk_root)
+    #agent = DDPG(env, actor, critic, rb)
+    agent = TD3(env, actor, critic, rb)
 
-    agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1)
+    #agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1)
+    agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1, 2)
 
 def evaluate(model_file):
     tk_root = tk.Tk()
 
-    max_episode_steps = 200
+    max_episode_steps = 500
 
     actor = tf.keras.models.load_model(model_file + "_actor.h5")
 

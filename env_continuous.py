@@ -22,6 +22,7 @@ class ContinuousPathPlanningEnv:
         self.rng = np.random.default_rng()
         self.draw_size = 10
         self.dim = dim
+        self.resets = 0
 
         if tkinter_root != None:
             self.tk_root = tkinter_root
@@ -61,6 +62,8 @@ class ContinuousPathPlanningEnv:
         return free
 
     def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=False):
+        d = 5 + 1.01 ** self.resets
+        self.resets += 1
         if random:
             while True:
                 self.pos = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
@@ -71,7 +74,7 @@ class ContinuousPathPlanningEnv:
             while True:
                 self.goal = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
                 
-                if self._is_free(self.goal):
+                if not np.array_equal(self.pos, self.goal) and self._is_free(self.goal) and np.linalg.norm(self.pos - self.goal) < d:
                     break
         else:
             self.pos = start
@@ -202,7 +205,7 @@ class ContinuousPathPlanningEnv:
         return not hit
 
     # Note: this function is only an estimate, not exact
-    def _wall_distance_heuristic(self, pos):
+    def _wall_distance(self, pos):
         grid_pos = np.floor(pos).astype(np.int32)
 
         min_dist = None
@@ -221,11 +224,10 @@ class ContinuousPathPlanningEnv:
                     if min_dist is None or dist < min_dist:
                         min_dist = dist
 
-        if min_dist is None:
-            min_dist = 6.0
+        if not min_dist is None:
+            min_dist = max(0.1, min_dist)
 
-        #return -1.0 / max(min_dist, 0.1)
-        return -2.0 * max(min_dist, 0.1) ** -0.75
+        return min_dist
 
     def step(self, action):
         action = np.squeeze(action)
@@ -245,10 +247,22 @@ class ContinuousPathPlanningEnv:
         #reward = reward / 3000.0
 
         if terminal:
-            reward = 5
+            reward = 1
         else:
-            reward = -1
+            #reward = -1
+            reward = -dist * 0.01
 
+        #if terminal:
+        #    reward = 200
+        #elif result == False:
+        #    reward = -150
+        #else:
+        #    wall_dist = self._wall_distance(self.pos)
+        #    if wall_dist is None:
+        #        reward = -dist / np.linalg.norm(self.goal - self.start)
+        #    else:
+        #        reward = wall_dist - 6.0
+        
         #dist = np.linalg.norm(self.goal - self.pos)
         #reward = -0.01 * dist * dist - 5
         #terminal = np.array_equal(self.goal, self.pos)
@@ -308,6 +322,7 @@ class ContinuousPathPlanningEnv:
         dir = dir / norm
 
         return [state, dir]
+        #return [state, np.array([dir[0], dir[1], norm])]
 
     def draw_img(self, out_file="results/out.png"):
         with Image.new(mode="RGB", size=(self.grid_width*self.draw_size, self.grid_height*self.draw_size)) as img:

@@ -6,6 +6,7 @@ import tensorflow as tf
 
 from ddpg import *
 from proportional_replay_buffer import *
+from td3 import *
 from uniform_replay_buffer import *
 
 def create_actor_model(lr):
@@ -107,8 +108,10 @@ def train():
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
     env = PendulumEnvWrapper()
-    agent = DDPG(env, actor, critic, rb)
-    agent.train(0.99, action_noise, max_episode_steps, 0.005, 0.005, 1)
+    #agent = DDPG(env, actor, critic, rb)
+    #agent.train(0.99, action_noise, max_episode_steps, 0.005, 0.005, 1)
+    agent = TD3(env, actor, critic, rb)
+    agent.train(0.99, action_noise, max_episode_steps, 0.005, 0.005, 1, 2)
 
 if __name__ == "__main__":
     train()
