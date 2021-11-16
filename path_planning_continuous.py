@@ -42,7 +42,7 @@ def create_cnn():
 
 def create_dnn():
     return tf.keras.models.Sequential([
-        tf.keras.layers.Dense(16, input_dim = 2, activation = "relu"),
+        tf.keras.layers.Dense(16, input_dim = 3, activation = "relu"),
         #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
@@ -124,9 +124,10 @@ def train(model_file = None):
 
     learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.999)
     learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.999)
-    #action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
-    rng = np.random.default_rng()
-    action_noise = lambda x: 2*(rng.random() - 0.5) * (rng.random() ** 20)
+    action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
+    #rng = np.random.default_rng()
+    #asd = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
+    #action_noise = lambda it: rng.random() - 0.5 if it < 10000 else asd(it)
     tau = 0.001
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
@@ -140,12 +141,12 @@ def train(model_file = None):
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = ContinuousPathPlanningEnv("grid3.bmp", DIM, tk_root)
-    #agent = DDPG(env, actor, critic, rb)
-    agent = TD3(env, actor, critic, rb)
+    env = ContinuousPathPlanningEnv("grid_empty_large.bmp", DIM, tk_root)
+    agent = DDPG(env, actor, critic, rb)
+    #agent = TD3(env, actor, critic, rb)
 
-    #agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1)
-    agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1, 2)
+    agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1)
+    #agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1, 2)
 
 def evaluate(model_file):
     tk_root = tk.Tk()
@@ -195,7 +196,7 @@ def evaluate(model_file):
         end = np.array([x, y])
         run()
 
-    env = ContinuousPathPlanningEnv("grid2.bmp", DIM, tk_root, on_click_left, on_click_right)
+    env = ContinuousPathPlanningEnv("grid3.bmp", DIM, tk_root, on_click_left, on_click_right)
     env.display()
 
     tk_root.mainloop()

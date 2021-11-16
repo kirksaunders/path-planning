@@ -18,6 +18,7 @@ class ContinuousPathPlanningEnv:
         self.start = np.array([0, 0])
         self.goal = np.array([0, 0])
         self.path = []
+        self.dir = np.array([0, 0])
 
         self.rng = np.random.default_rng()
         self.draw_size = 10
@@ -85,6 +86,7 @@ class ContinuousPathPlanningEnv:
 
         self.start = self.pos
         self.path = []
+        self.dir = np.array([0, 0])
 
         return self.get_state()
 
@@ -199,6 +201,7 @@ class ContinuousPathPlanningEnv:
 
                 new_pos = pos
 
+        self.dir = new_pos - self.pos
         self.pos = new_pos
         self.path.append(new_pos)
 
@@ -230,51 +233,39 @@ class ContinuousPathPlanningEnv:
         return min_dist
 
     def step(self, action):
+        old_dir = self.dir
+
         action = np.squeeze(action)
         result = self._move(action)
 
         dist = np.linalg.norm(self.goal - self.pos)
         terminal = dist < 0.5
-        #reward = -dist * 0.25
-        #if terminal:
-        #    reward += 10000
-        #else:
-        #    reward -= 1
-        #if result == False:
-        #    reward -= 5
-        #reward += self._wall_distance_heuristic(self.pos)
 
-        #reward = reward / 3000.0
+        reward = 0.0
 
         if terminal:
-            reward = 1
-        else:
-            #reward = -1
-            reward = -dist * 0.01
+            reward += 1000
 
-        #if terminal:
-        #    reward = 200
-        #elif result == False:
-        #    reward = -150
-        #else:
-        #    wall_dist = self._wall_distance(self.pos)
-        #    if wall_dist is None:
-        #        reward = -dist / np.linalg.norm(self.goal - self.start)
-        #    else:
-        #        reward = wall_dist - 6.0
-        
-        #dist = np.linalg.norm(self.goal - self.pos)
-        #reward = -0.01 * dist * dist - 5
-        #terminal = np.array_equal(self.goal, self.pos)
-        #if terminal:
-        #    reward += 500
-        #if result == False:
-        #    reward -= 50
+        #reward -= 5 * dist / np.linalg.norm(self.goal - self.start)
+        reward = -dist * 0.01
 
-        # "Normalize" the reward so it's closer to the range [-1, 1]
-        #reward = reward / 1000.0
-        # reward clipping?
-        #reward = np.sign(reward)
+        # Reward staying away from walls
+        wall_dist = self._wall_distance(self.pos)
+        if not wall_dist is None:
+            reward += 0.25 * min(0.0, wall_dist - 6.0)
+
+        norm = np.linalg.norm(old_dir)
+        if norm > 0.000001:
+            old_dir = old_dir / norm
+
+        new_dir = self.dir
+        norm = np.linalg.norm(new_dir)
+        if norm > 0.000001:
+            new_dir = new_dir / norm
+
+        # Reward component for amount of direction change, should smooth
+        # out trajectory
+        reward += 2.0 * (np.dot(old_dir, new_dir) - 1.0)
 
         return self.get_state(), reward, terminal
 
@@ -317,12 +308,11 @@ class ContinuousPathPlanningEnv:
 
         dir = self.goal - self.pos
         norm = np.linalg.norm(dir)
-        if norm == 0:
-            norm = 1
-        dir = dir / norm
+        if norm > 0.000001:
+            dir = dir / norm
 
-        return [state, dir]
-        #return [state, np.array([dir[0], dir[1], norm])]
+        #return [state, dir]
+        return [state, np.array([dir[0], dir[1], norm])]
 
     def draw_img(self, out_file="results/out.png"):
         with Image.new(mode="RGB", size=(self.grid_width*self.draw_size, self.grid_height*self.draw_size)) as img:
