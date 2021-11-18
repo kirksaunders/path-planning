@@ -4,7 +4,6 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 import tkinter as tk
-from time import sleep
 
 from ddpg import *
 from env_continuous import *
@@ -42,7 +41,7 @@ def create_cnn():
 
 def create_dnn():
     return tf.keras.models.Sequential([
-        tf.keras.layers.Dense(16, input_dim = 3, activation = "relu"),
+        tf.keras.layers.Dense(16, input_dim = 2, activation = "relu"),
         #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
@@ -53,7 +52,8 @@ def create_actor_model(lr):
     initializer = tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
 
     input = tf.keras.layers.concatenate([cnn.output, dnn.output])
-    x = tf.keras.layers.Dense(32, activation = "relu")(input)
+    x = tf.keras.layers.Dense(128, activation = "relu")(input)
+    x = tf.keras.layers.Dense(64, activation = "relu")(input)
     x = tf.keras.layers.Dense(2, activation = "tanh", kernel_initializer=initializer)(x)
     output = x * 1.0 # Allow displacement distance of 2 in each dimension each step
 
@@ -72,12 +72,13 @@ def create_critic_model(lr):
     initializer = tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
 
     x = tf.keras.layers.concatenate([cnn.output, dnn.output])
-    state_output = tf.keras.layers.Dense(32, activation = "relu")(x)
+    state_output = tf.keras.layers.Dense(64, activation = "relu")(x)
     
     action_input = tf.keras.layers.Input(shape=(2,))
     action_output = tf.keras.layers.Dense(16, activation = "relu")(action_input)
 
     x = tf.keras.layers.concatenate([state_output, action_output])
+    x = tf.keras.layers.Dense(128, activation = "relu")(x)
     x = tf.keras.layers.Dense(64, activation = "relu")(x)
     output = tf.keras.layers.Dense(1, activation = "linear", kernel_initializer=initializer)(x)
 
@@ -122,8 +123,8 @@ def train(model_file = None):
     max_episode_steps = 400
     batch_size = 16
 
-    learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.999)
-    learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.999)
+    learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.995)
+    learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.995)
     action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
     #rng = np.random.default_rng()
     #asd = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
@@ -141,7 +142,7 @@ def train(model_file = None):
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = ContinuousPathPlanningEnv("grid_empty_large.bmp", DIM, tk_root)
+    env = ContinuousPathPlanningEnv("grid4.bmp", DIM, tk_root)
     agent = DDPG(env, actor, critic, rb)
     #agent = TD3(env, actor, critic, rb)
 
@@ -176,7 +177,6 @@ def evaluate(model_file):
             env.display()
             if terminal:
                 break
-            sleep(0.025)
 
     def on_click_left(event):
         nonlocal start
@@ -196,7 +196,7 @@ def evaluate(model_file):
         end = np.array([x, y])
         run()
 
-    env = ContinuousPathPlanningEnv("grid3.bmp", DIM, tk_root, on_click_left, on_click_right)
+    env = ContinuousPathPlanningEnv("grid4.bmp", DIM, tk_root, on_click_left, on_click_right)
     env.display()
 
     tk_root.mainloop()

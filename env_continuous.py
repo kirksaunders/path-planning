@@ -41,13 +41,13 @@ class ContinuousPathPlanningEnv:
 
         # Ensure there are two spaces free around pos
         free = True
-        for dy in range(-2, 3):
+        for dy in range(-3, 4):
             y = grid_pos[1] + dy
             if y < 0 or y >= self.grid_height:
                 free = False
                 break
 
-            for dx in range(-2, 3):
+            for dx in range(-3, 4):
                 x = grid_pos[0] + dx
                 if x < 0 or x >= self.grid_width:
                     free = False
@@ -63,7 +63,7 @@ class ContinuousPathPlanningEnv:
         return free
 
     def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=False):
-        d = 5 + 1.01 ** self.resets
+        #d = 5 + 1.01 ** self.resets
         self.resets += 1
         if random:
             while True:
@@ -75,7 +75,7 @@ class ContinuousPathPlanningEnv:
             while True:
                 self.goal = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
                 
-                if not np.array_equal(self.pos, self.goal) and self._is_free(self.goal) and np.linalg.norm(self.pos - self.goal) < d:
+                if not np.array_equal(self.pos, self.goal) and self._is_free(self.goal):# and np.linalg.norm(self.pos - self.goal) < d:
                     break
         else:
             self.pos = start
@@ -247,12 +247,12 @@ class ContinuousPathPlanningEnv:
             reward += 1000
 
         #reward -= 5 * dist / np.linalg.norm(self.goal - self.start)
-        reward = -dist * 0.01
+        reward = -dist * 0.05
 
         # Reward staying away from walls
-        wall_dist = self._wall_distance(self.pos)
-        if not wall_dist is None:
-            reward += 0.25 * min(0.0, wall_dist - 6.0)
+        #wall_dist = self._wall_distance(self.pos)
+        #if not wall_dist is None:
+        #    reward += 0.25 * min(0.0, wall_dist - 6.0)
 
         norm = np.linalg.norm(old_dir)
         if norm > 0.000001:
@@ -262,10 +262,13 @@ class ContinuousPathPlanningEnv:
         norm = np.linalg.norm(new_dir)
         if norm > 0.000001:
             new_dir = new_dir / norm
+        else:
+            # Penalize staying in place
+            reward -= 0.25
 
         # Reward component for amount of direction change, should smooth
         # out trajectory
-        reward += 2.0 * (np.dot(old_dir, new_dir) - 1.0)
+        reward += 0.5 * (np.dot(old_dir, new_dir) - 1.0)
 
         return self.get_state(), reward, terminal
 
@@ -311,8 +314,8 @@ class ContinuousPathPlanningEnv:
         if norm > 0.000001:
             dir = dir / norm
 
-        #return [state, dir]
-        return [state, np.array([dir[0], dir[1], norm])]
+        return [state, dir]
+        #return [state, np.array([dir[0], dir[1], norm])]
 
     def draw_img(self, out_file="results/out.png"):
         with Image.new(mode="RGB", size=(self.grid_width*self.draw_size, self.grid_height*self.draw_size)) as img:
