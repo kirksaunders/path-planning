@@ -323,24 +323,31 @@ class ContinuousPathPlanningEnv:
             
             for y in range(0, self.grid_height):
                 for x in range(0, self.grid_width):
-                    if x == self.goal[0] and y == self.goal[1]:
-                        color = (0, 255, 0)
-                    elif x == self.start[0] and y == self.start[1]:
-                        color = (255, 0, 0)
-                    elif x == self.pos[0] and y == self.pos[1]:
-                        color = (225, 100, 25)
-                    elif self.grid[y, x] == 1:
-                        color = (50, 50, 50)
-                    elif self.path[y, x] == 1:
-                        color = (150, 150, 255)
-                    else:
-                        color = (225, 225, 225)
+                    color = "#555555" if self.grid[y, x] == 1 else "white"
 
                     draw.rectangle(
                         xy=[(x*self.draw_size, y*self.draw_size), ((x+1)*self.draw_size, (y+1)*self.draw_size)],
-                        outline=(0, 0, 0),
+                        #outline=(0, 0, 0),
                         fill=color
                     )
+
+            # Draw start
+            ul = (self.start - 0.75) * self.draw_size
+            lr = (self.start + 0.75) * self.draw_size
+            draw.ellipse([(ul[0], ul[1]), (lr[0], lr[1])], fill="red")
+
+            # Draw goal
+            ul = (self.goal - 0.75) * self.draw_size
+            lr = (self.goal + 0.75) * self.draw_size
+            draw.ellipse([(ul[0], ul[1]), (lr[0], lr[1])], fill="green")
+            
+            # Draw path taken
+            s = self.start * self.draw_size
+            lines = [(s[0], s[1])]
+            for p in self.path:
+                p *= self.draw_size
+                lines.append((p[0], p[1]))
+            draw.line(lines, width=3, fill="cyan")
             
             img.save(out_file)
     

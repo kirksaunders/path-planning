@@ -178,6 +178,8 @@ def evaluate(model_file):
             if terminal:
                 break
 
+        env.draw_img()
+
     def on_click_left(event):
         nonlocal start
 
@@ -196,7 +198,7 @@ def evaluate(model_file):
         end = np.array([x, y])
         run()
 
-    env = ContinuousPathPlanningEnv("grid4.bmp", DIM, tk_root, on_click_left, on_click_right)
+    env = ContinuousPathPlanningEnv("grid3.bmp", DIM, tk_root, on_click_left, on_click_right)
     env.display()
 
     tk_root.mainloop()
