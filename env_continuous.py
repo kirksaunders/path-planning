@@ -228,7 +228,7 @@ class ContinuousPathPlanningEnv:
                         min_dist = dist
 
         if not min_dist is None:
-            min_dist = max(0.1, min_dist)
+            min_dist = max(0.001, min_dist)
 
         return min_dist
 
@@ -250,25 +250,25 @@ class ContinuousPathPlanningEnv:
         reward = -dist * 0.05
 
         # Reward staying away from walls
-        #wall_dist = self._wall_distance(self.pos)
-        #if not wall_dist is None:
-        #    reward += 0.25 * min(0.0, wall_dist - 6.0)
+        wall_dist = self._wall_distance(self.pos)
+        if not wall_dist is None:
+            reward += 0.5 * max(-0.6 * np.power(wall_dist + 0.5, -1.75), -2.0)
 
-        norm = np.linalg.norm(old_dir)
-        if norm > 0.000001:
-            old_dir = old_dir / norm
+        #norm = np.linalg.norm(old_dir)
+        #if norm > 0.000001:
+        #    old_dir = old_dir / norm
 
-        new_dir = self.dir
-        norm = np.linalg.norm(new_dir)
-        if norm > 0.000001:
-            new_dir = new_dir / norm
-        else:
+        #new_dir = self.dir
+        #norm = np.linalg.norm(new_dir)
+        #if norm > 0.000001:
+        #    new_dir = new_dir / norm
+        #else:
             # Penalize staying in place
-            reward -= 0.25
+        #    reward -= 0.25
 
         # Reward component for amount of direction change, should smooth
         # out trajectory
-        reward += 0.5 * (np.dot(old_dir, new_dir) - 1.0)
+        #reward += 0.5 * (np.dot(old_dir, new_dir) - 1.0)
 
         return self.get_state(), reward, terminal
 
