@@ -17,8 +17,8 @@ class ContinuousPathPlanningEnv:
         self.pos = np.array([0, 0])
         self.start = np.array([0, 0])
         self.goal = np.array([0, 0])
-        self.path = []
-        self.dir = np.array([0, 0])
+        self.path = [np.array([self.start[0], self.start[1]])]
+        self.avg_step_len = 0.0
 
         self.rng = np.random.default_rng()
         self.draw_size = 10
@@ -85,8 +85,8 @@ class ContinuousPathPlanningEnv:
         #self.goal = np.array([5.5, 17.5])
 
         self.start = self.pos
-        self.path = []
-        self.dir = np.array([0, 0])
+        self.path = [np.array([self.start[0], self.start[1]])]
+        self.avg_step_len = 0.0
 
         return self.get_state()
 
@@ -201,9 +201,12 @@ class ContinuousPathPlanningEnv:
 
                 new_pos = pos
 
-        self.dir = new_pos - self.pos
         self.pos = new_pos
         self.path.append(new_pos)
+
+        # Keep track of average step length
+        dist = np.linalg.norm(self.path[-1] - self.path[-2])
+        self.avg_step_len += (dist - self.avg_step_len) / (len(self.path) - 1)
 
         return not hit
 
@@ -233,8 +236,6 @@ class ContinuousPathPlanningEnv:
         return min_dist
 
     def step(self, action):
-        old_dir = self.dir
-
         action = np.squeeze(action)
         result = self._move(action)
 
@@ -253,6 +254,28 @@ class ContinuousPathPlanningEnv:
         wall_dist = self._wall_distance(self.pos)
         if not wall_dist is None:
             reward += 0.5 * max(-0.6 * np.power(wall_dist + 0.5, -1.75), -2.0)
+
+        # Reward component for first order derivative "smoothness"
+        if len(self.path) >= 3:
+            v2 = self.path[-2] - self.path[-3]
+            v1 = self.path[-1] - self.path[-2]
+
+            norm = np.linalg.norm(v1)
+            if norm > 0.000001:
+                v1 /= norm
+
+            norm = np.linalg.norm(v2)
+            if norm > 0.000001:
+                v2 /= norm
+
+            reward += 0.25 * np.dot(v1, v2)
+
+            # Reward component for second order derivative "smoothness"
+            reward += 0.15 * np.linalg.norm(self.path[-3] - 2*self.path[-2] + self.path[-1])
+
+        # Reward component to normalize step length
+        dist = np.linalg.norm(self.path[-1] - self.path[-2])
+        reward += -0.15 * (self.avg_step_len - dist) ** 2
 
         #norm = np.linalg.norm(old_dir)
         #if norm > 0.000001:
@@ -342,8 +365,7 @@ class ContinuousPathPlanningEnv:
             draw.ellipse([(ul[0], ul[1]), (lr[0], lr[1])], fill="green")
             
             # Draw path taken
-            s = self.start * self.draw_size
-            lines = [(s[0], s[1])]
+            lines = []
             for p in self.path:
                 p *= self.draw_size
                 lines.append((p[0], p[1]))
@@ -392,8 +414,8 @@ class ContinuousPathPlanningEnv:
         lr = (self.goal + 0.4) * self.draw_size
         self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="green")
         
-        # Draw path taken
-        for p in self.path:
+        # Draw path taken (ignore first element, it is the start)
+        for p in self.path[1:]:
             ul = (p - 0.25) * self.draw_size
             lr = (p + 0.25) * self.draw_size
             self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="cyan")

@@ -156,8 +156,18 @@ def evaluate(model_file):
 
     actor = tf.keras.models.load_model(model_file + "_actor.h5")
 
-    start = np.array([0, 0])
-    end = np.array([5, 5])
+    # Grid 3
+    #start = np.array([90, 90])
+    #end = np.array([10, 10])
+
+    # Grid 4
+    #start = np.array([60, 65])
+    #end = np.array([10, 10])
+
+    # Grid 5
+    start = np.array([65, 65])
+    end = np.array([10, 10])
+
     input = 0
 
     def run():
@@ -198,8 +208,10 @@ def evaluate(model_file):
         end = np.array([x, y])
         run()
 
-    env = ContinuousPathPlanningEnv("grid3.bmp", DIM, tk_root, on_click_left, on_click_right)
+    env = ContinuousPathPlanningEnv("grid_empty_large.bmp", DIM, tk_root, on_click_left, on_click_right)
     env.display()
+
+    run()
 
     tk_root.mainloop()
 
