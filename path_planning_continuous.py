@@ -139,10 +139,14 @@ def train(model_file = None):
         actor = tf.keras.models.load_model(model_file + "_actor.h5")
         critic = tf.keras.models.load_model(model_file + "_critic.h5")
 
+    from tensorflow.keras.utils import plot_model
+    plot_model(actor, to_file="actor_model.png", show_shapes=True, show_layer_names=False)
+    plot_model(critic, to_file="critic_model.png", show_shapes=True, show_layer_names=False)
+
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = ContinuousPathPlanningEnv("grid4.bmp", DIM, tk_root)
+    env = ContinuousPathPlanningEnv("grid_empty_large.bmp", DIM, tk_root)
     agent = DDPG(env, actor, critic, rb)
     #agent = TD3(env, actor, critic, rb)
 
