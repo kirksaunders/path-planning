@@ -3,13 +3,19 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 
-from prioritized_replay_buffer import *
-from replay_buffer import *
+from ..memory.prioritized_replay_buffer import *
+from ..memory.replay_buffer import *
 
 def state_to_tf_input(state):
     return [x.reshape((1, *(x.shape))) for x in state]
 
 class TD3:
+    """
+    Agent implementing the Twin Delayed Deep Deterministic policy gradient algorithm.
+    See paper (https://arxiv.org/abs/1802.09477).
+    WARNING: Not well-tested and not ready for use.
+    """
+
     def __init__(self, env, actor, critic, replay_buffer):
         self.env = env
 

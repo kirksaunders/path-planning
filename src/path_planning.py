@@ -1,3 +1,6 @@
+# This code is much rougher and out of date in favor of the continuous version.
+# It may not even run correctly.
+
 import numpy as np
 import sys
 import os
@@ -6,10 +9,10 @@ import tensorflow as tf
 import tkinter as tk
 from time import sleep
 
-from ddqn import DDQN, state_to_tf_input
-from env import PathPlanningEnv
-from uniform_replay_buffer import *
-from proportional_replay_buffer import *
+from drl.agents.ddqn import *
+from drl.environments.discrete_path_planning import *
+from drl.memory.uniform_replay_buffer import *
+from drl.memory.proportional_replay_buffer import *
 
 DIM = 5
 
@@ -88,7 +91,7 @@ def train(model_file = None):
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = PathPlanningEnv("grid2.bmp", DIM, tk_root)
+    env = DiscretePathPlanningEnv("grid2.bmp", DIM, tk_root)
     agent = DDQN(env, model, rb)
     agent.train(0.999, exploration_rate, max_episode_steps, 250, 4)
 
@@ -140,7 +143,7 @@ def evaluate(model_file):
         end = np.array([x, y])
         run()
 
-    env = PathPlanningEnv("grid2.bmp", DIM, tk_root, on_click_left, on_click_right)
+    env = DiscretePathPlanningEnv("grid2.bmp", DIM, tk_root, on_click_left, on_click_right)
     env.display()
 
     tk_root.mainloop()

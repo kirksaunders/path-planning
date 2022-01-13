@@ -3,13 +3,18 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 
-from prioritized_replay_buffer import *
-from replay_buffer import *
+from ..memory.prioritized_replay_buffer import *
+from ..memory.replay_buffer import *
 
 def state_to_tf_input(state):
     return [x.reshape((1, *(x.shape))) for x in state]
 
 class DDQN:
+    """
+    Agent implementing the Double Deep Q Network algorithm.
+    See paper (https://arxiv.org/abs/1509.06461).
+    """
+
     def __init__(self, env, q, replay_buffer):
         self.env = env
         self.q = q

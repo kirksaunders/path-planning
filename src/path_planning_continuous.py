@@ -5,12 +5,12 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 import tkinter as tk
 
-from ddpg import *
-from env_continuous import *
-from td3 import *
-from uniform_replay_buffer import *
-from proportional_replay_buffer import *
+from drl.agents.ddpg import *
+from drl.environments.continuous_path_planning import *
+from drl.memory.uniform_replay_buffer import *
+from drl.memory.proportional_replay_buffer import *
 
+# Amount of the map that the agents sees. DIM=5 is 11x11 view. (2*DIM+1)x(2*DIM+1) in general.
 DIM = 5
 
 def create_cnn():
@@ -36,13 +36,11 @@ def create_cnn():
         ),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(64, activation = "relu"),
-        #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
 def create_dnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Dense(16, input_dim = 2, activation = "relu"),
-        #tf.keras.layers.Dense(8, activation = "relu")
     ])
 
 def create_actor_model(lr):
@@ -54,8 +52,7 @@ def create_actor_model(lr):
     input = tf.keras.layers.concatenate([cnn.output, dnn.output])
     x = tf.keras.layers.Dense(128, activation = "relu")(input)
     x = tf.keras.layers.Dense(64, activation = "relu")(input)
-    x = tf.keras.layers.Dense(2, activation = "tanh", kernel_initializer=initializer)(x)
-    output = x * 1.0 # Allow displacement distance of 2 in each dimension each step
+    output = tf.keras.layers.Dense(2, activation = "tanh", kernel_initializer=initializer)(x)
 
     model = tf.keras.models.Model(inputs = [cnn.input, dnn.input], outputs=output)
 
@@ -90,6 +87,7 @@ def create_critic_model(lr):
 
     return model
 
+# Class taken from keras examples. (https://keras.io/examples/rl/ddpg_pendulum/)
 class OUActionNoise:
     def __init__(self, mean, std_deviation, theta=0.15, dt=1e-2, x_initial=None):
         self.theta = theta
@@ -117,18 +115,17 @@ class OUActionNoise:
         else:
             self.x_prev = np.zeros_like(self.mean)
 
-def train(model_file = None):
+def train(grid, model_file = None):
     tk_root = tk.Tk()
 
     max_episode_steps = 400
     batch_size = 16
+    train_interval = 1
+    report_interval = 5
 
     learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.995)
     learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.995)
     action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
-    #rng = np.random.default_rng()
-    #asd = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
-    #action_noise = lambda it: rng.random() - 0.5 if it < 10000 else asd(it)
     tau = 0.001
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
@@ -139,21 +136,20 @@ def train(model_file = None):
         actor = tf.keras.models.load_model(model_file + "_actor.h5")
         critic = tf.keras.models.load_model(model_file + "_critic.h5")
 
-    from tensorflow.keras.utils import plot_model
+    # Plot network structure
+    """from tensorflow.keras.utils import plot_model
     plot_model(actor, to_file="actor_model.png", show_shapes=True, show_layer_names=False)
-    plot_model(critic, to_file="critic_model.png", show_shapes=True, show_layer_names=False)
+    plot_model(critic, to_file="critic_model.png", show_shapes=True, show_layer_names=False)"""
 
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = ContinuousPathPlanningEnv("grid_empty_large.bmp", DIM, tk_root)
+    env = ContinuousPathPlanningEnv(grid, DIM, tk_root)
     agent = DDPG(env, actor, critic, rb)
-    #agent = TD3(env, actor, critic, rb)
 
-    agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1)
-    #agent.train(0.99, action_noise, max_episode_steps, tau, tau, 1, 2)
+    agent.train(0.99, action_noise, max_episode_steps, tau, tau, train_interval, report_interval)
 
-def evaluate(model_file):
+def evaluate(grid, model_file):
     tk_root = tk.Tk()
 
     max_episode_steps = 500
@@ -181,7 +177,7 @@ def evaluate(model_file):
         input_copy = input
 
         total_reward = 0
-        state = env.reset(start, end)
+        state = env.reset(start, end, random=False)
         for t in range(0, max_episode_steps):
             if input != input_copy:
                 break
@@ -212,7 +208,7 @@ def evaluate(model_file):
         end = np.array([x, y])
         run()
 
-    env = ContinuousPathPlanningEnv("grid_empty_large.bmp", DIM, tk_root, on_click_left, on_click_right)
+    env = ContinuousPathPlanningEnv(grid, DIM, tk_root, on_click_left, on_click_right)
     env.display()
 
     run()
@@ -220,9 +216,9 @@ def evaluate(model_file):
     tk_root.mainloop()
 
 if __name__=='__main__':
-    if len(sys.argv) >= 3 and sys.argv[1] == "evaluate":
-        evaluate(sys.argv[2])
-    elif len(sys.argv) >= 3 and sys.argv[1] == "resume":
-        train(sys.argv[2])
-    else:
-        train()
+    if len(sys.argv) >= 4 and sys.argv[2] == "evaluate":
+        evaluate(sys.argv[1], sys.argv[3])
+    elif len(sys.argv) >= 4 and sys.argv[2] == "resume":
+        train(sys.argv[1], sys.argv[3])
+    elif len(sys.argv) >= 3 and sys.argv[2] == "train":
+        train(sys.argv[1])

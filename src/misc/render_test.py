@@ -1,8 +1,11 @@
+# Allows the user to act as an agent by clicking and renders useful
+# graphics to the current working directory as PNGs.
+
 import numpy as np
 from PIL import Image, ImageDraw
 import tkinter as tk
 
-from env_continuous import *
+from drl.environments.continuous_path_planning import *
 
 DIM = 5
 
@@ -28,7 +31,7 @@ def on_click_left(event):
                     fill=(color, color, color)
                 )
         
-        img.save("asd.png")
+        img.save("input.png")
 
     grid_pos = np.floor(env.pos).astype(np.int32)
 
@@ -67,7 +70,7 @@ def on_click_left(event):
         lr = (center + dif + 0.25) * 25
         draw.ellipse([(ul[0], ul[1]), (lr[0], lr[1])], fill="cyan")
         
-        img.save("asd2.png")
+        img.save("overview.png")
     env.display()
 
 env = ContinuousPathPlanningEnv("grid2.bmp", DIM, tk_root, on_click_left)

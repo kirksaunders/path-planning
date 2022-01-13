@@ -2,7 +2,15 @@ import numpy as np
 from PIL import Image, ImageDraw
 import tkinter as tk
 
-class PathPlanningEnv:
+from .environment import Environment
+
+class DiscretePathPlanningEnv(Environment):
+    """
+    Environment for training a path planning agent that must take steps
+    that are locked to grid spaces.
+    Warning: More outdated than its continuous counterpart.
+    """
+
     def __init__(self, map, dim, tkinter_root=None, on_click_left=None, on_click_right=None):
         # Load grid from map
         img = Image.open(map, "r")

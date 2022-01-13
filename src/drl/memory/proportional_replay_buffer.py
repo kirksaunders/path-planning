@@ -1,8 +1,13 @@
 import numpy as np
 
-from prioritized_replay_buffer import *
+from .prioritized_replay_buffer import *
 
 class ProportionalReplayBuffer(PrioritizedReplayBuffer):
+    """
+    Prioritized replay buffer that gives each entry priority proportional
+    to its stored priority value (in many cases, absolute TD error is used).
+    """
+
     def __init__(self, capacity, batch_size, alpha, beta):
         self.capacity = capacity
         self.batch_size = batch_size

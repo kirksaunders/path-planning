@@ -1,16 +1,26 @@
+import json
 import numpy as np
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
 
-from prioritized_replay_buffer import *
-from replay_buffer import *
+from ..memory.prioritized_replay_buffer import *
+from ..memory.replay_buffer import *
 
 def state_to_tf_input(state):
     return [x.reshape((1, *(x.shape))) for x in state]
 
 class DDPG:
+    """
+    Agent implementing the Deep Deterministic Policy Gradient algorithm.
+    See paper (https://arxiv.org/abs/1509.02971).
+    """
+    
     def __init__(self, env, actor, critic, replay_buffer):
+        """
+        Initialize agent with given environment, actor+critic networks, and replay buffer.
+        """
+        
         self.env = env
         self.actor = actor
         self.actor_target = tf.keras.models.clone_model(actor)
@@ -24,7 +34,7 @@ class DDPG:
         self.episodes = 0
 
     @tf.function
-    def train_step(self, gamma, states, actions, rewards, terminals, next_states):
+    def _train_step(self, gamma, states, actions, rewards, terminals, next_states):
         next_actions = self.actor_target(next_states, training=True)
         q_next_values = self.critic_target([next_states, next_actions], training=True)
         y = rewards + gamma * tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32))
@@ -49,7 +59,7 @@ class DDPG:
         self.actor.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
 
     @tf.function
-    def train_step_per(self, gamma, states, actions, rewards, terminals, next_states, weights):
+    def _train_step_per(self, gamma, states, actions, rewards, terminals, next_states, weights):
         next_actions = tf.squeeze(self.actor_target(next_states, training=True))
         q_next_values = self.critic_target([next_states, next_actions], training=True)
         y = rewards + gamma * tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32))
@@ -76,14 +86,25 @@ class DDPG:
         return tf.squeeze(tf.abs(td_error))
 
     @tf.function
-    def update_weights(self, target, main, tau):
+    def _update_weights(self, target, main, tau):
         for (x, y) in zip(target.variables, main.variables):
             x.assign(tau * y + (1 - tau) * x)
 
-    def train(self, gamma, action_noise, episode_step_limit, tau_actor, tau_critic, train_interval):
-        total_rewards = [None] * 40
+    def train(self, gamma, action_noise, episode_step_limit, tau_actor, tau_critic, train_interval, report_interval):
+        """
+        Train agent with parameters:
+            gamma: discount factor
+            action_noise: noise function to add to action from actor network
+            episode_step_limit: number of steps to end each episode at
+            tau_actor: amount to move target actor network towards learned network each step
+            tau_actor: amount to move target critic network towards learned network each step
+            train_interval: number of iterations that need to pass for each training step
+            report_interval: number of episodes that need to pass for each progress message and network save
+        """
+
+        total_rewards = [None] * report_interval
         while True:
-            state = self.env.reset(random=True)
+            state = self.env.reset()
             total_reward = 0.0
             for t in range(0, episode_step_limit):
                 self.iterations += 1
@@ -97,41 +118,41 @@ class DDPG:
                 if self.replay_buffer.size >= self.replay_buffer.batch_size and self.iterations % train_interval == 0:
                     if self.use_per:
                         states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch()
-                        priorities = self.train_step_per(gamma, states, actions, rewards, terminals, next_states, weights)
+                        priorities = self._train_step_per(gamma, states, actions, rewards, terminals, next_states, weights)
                         self.replay_buffer.update(indices, priorities.numpy())
                     else:
                         states, actions, rewards, terminals, next_states = self.replay_buffer.mini_batch()
-                        self.train_step(gamma, states, actions, rewards, terminals, next_states)
+                        self._train_step(gamma, states, actions, rewards, terminals, next_states)
 
                 state = next_state
 
                 # Move target networks in direction of main networks
-                self.update_weights(self.actor_target, self.actor, tau_actor)
-                self.update_weights(self.critic_target, self.critic, tau_critic)
+                self._update_weights(self.actor_target, self.actor, tau_actor)
+                self._update_weights(self.critic_target, self.critic, tau_critic)
 
                 if terminal:
                     break
 
-            total_rewards[self.episodes % 40] = total_reward
+            total_rewards[self.episodes % report_interval] = total_reward
             self.episodes += 1
 
-            if self.episodes % 5 == 0:
+            if self.episodes % report_interval == 0:
                 r = 0.0
                 c = 0
-                for i in range(0, min(40, self.episodes)):
+                for i in range(0, report_interval):
                     r += total_rewards[i]
                     c += 1
-                print("Episode {}, learning rate: {}, average reward: {}".format(
-                    self.episodes, 0, r / c))
+                print("Episode {}, average reward (of last {}): {}".format(
+                    self.episodes, report_interval, r / c))
 
+                # Save networks to results directory
                 self.actor.save("results/ep{}_actor.h5".format(self.episodes))
                 self.critic.save("results/ep{}_critic.h5".format(self.episodes))
+                
+                # Save some meta data about these episodes
+                data = {"rewards":total_rewards}
+                with open("results/ep_{}.meta".format(self.episodes), "w") as file:
+                    file.write(json.dumps(data))
 
-                state = self.env.reset(random=True)
-                for t in range(0, episode_step_limit):
-                    action = self.actor(state_to_tf_input(state), training=False)
-                    next_state, reward, terminal = self.env.step(action)
-                    if terminal:
-                        break
-                    state = next_state
+                # Display state of most recent episode
                 self.env.display()

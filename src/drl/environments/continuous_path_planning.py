@@ -2,7 +2,14 @@ import numpy as np
 from PIL import Image, ImageDraw
 import tkinter as tk
 
-class ContinuousPathPlanningEnv:
+from .environment import Environment
+
+class ContinuousPathPlanningEnv(Environment):
+    """
+    Environment for training a path planning agent that can take steps
+    of arbitrary length and direction (not locked to grid).
+    """
+
     def __init__(self, map, dim, tkinter_root=None, on_click_left=None, on_click_right=None):
         # Load grid from map
         img = Image.open(map, "r")
@@ -62,8 +69,12 @@ class ContinuousPathPlanningEnv:
 
         return free
 
-    def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=False):
-        #d = 5 + 1.01 ** self.resets
+    def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=True):
+        """
+        Reset environment to either a random or given state.
+        Returns state value for network.
+        """
+
         self.resets += 1
         if random:
             while True:
@@ -75,14 +86,11 @@ class ContinuousPathPlanningEnv:
             while True:
                 self.goal = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
                 
-                if not np.array_equal(self.pos, self.goal) and self._is_free(self.goal):# and np.linalg.norm(self.pos - self.goal) < d:
+                if not np.array_equal(self.pos, self.goal) and self._is_free(self.goal):
                     break
         else:
             self.pos = start
             self.goal = goal
-
-        #self.pos = np.array([43.5, 26.5])
-        #self.goal = np.array([5.5, 17.5])
 
         self.start = self.pos
         self.path = [np.array([self.start[0], self.start[1]])]
@@ -236,6 +244,10 @@ class ContinuousPathPlanningEnv:
         return min_dist
 
     def step(self, action):
+        """
+        Take given action and return next state, reward, and whether episode should terminate.
+        """
+
         action = np.squeeze(action)
         result = self._move(action)
 
@@ -247,7 +259,6 @@ class ContinuousPathPlanningEnv:
         if terminal:
             reward += 1000
 
-        #reward -= 5 * dist / np.linalg.norm(self.goal - self.start)
         reward = -dist * 0.05
 
         # Reward staying away from walls
@@ -255,8 +266,9 @@ class ContinuousPathPlanningEnv:
         if not wall_dist is None:
             reward += 0.5 * max(-0.6 * np.power(wall_dist + 0.5, -1.75), -2.0)
 
-        # Reward component for first order derivative "smoothness"
-        if len(self.path) >= 3:
+        # Reward component for first order derivative "smoothness".
+        # Haven't produced great results yet, needs more work.
+        """if len(self.path) >= 3:
             v2 = self.path[-2] - self.path[-3]
             v1 = self.path[-1] - self.path[-2]
 
@@ -275,27 +287,15 @@ class ContinuousPathPlanningEnv:
 
         # Reward component to normalize step length
         dist = np.linalg.norm(self.path[-1] - self.path[-2])
-        reward += -0.15 * (self.avg_step_len - dist) ** 2
-
-        #norm = np.linalg.norm(old_dir)
-        #if norm > 0.000001:
-        #    old_dir = old_dir / norm
-
-        #new_dir = self.dir
-        #norm = np.linalg.norm(new_dir)
-        #if norm > 0.000001:
-        #    new_dir = new_dir / norm
-        #else:
-            # Penalize staying in place
-        #    reward -= 0.25
-
-        # Reward component for amount of direction change, should smooth
-        # out trajectory
-        #reward += 0.5 * (np.dot(old_dir, new_dir) - 1.0)
+        reward += -0.15 * (self.avg_step_len - dist) ** 2"""
 
         return self.get_state(), reward, terminal
 
     def get_state(self):
+        """
+        Return current state.
+        """
+
         grid_pos = np.floor(self.pos).astype(np.int32)
 
         # Build coeff matrix for performing bilinear interpolation (very similar to a convolution)
@@ -332,15 +332,19 @@ class ContinuousPathPlanningEnv:
                 # Apply interpolation coefficients on these spaces
                 state[dy+self.dim, dx+self.dim, 0] = np.sum(np.multiply(spaces, interp))
 
+        # Normalize displacement vector
         dir = self.goal - self.pos
         norm = np.linalg.norm(dir)
         if norm > 0.000001:
             dir = dir / norm
 
         return [state, dir]
-        #return [state, np.array([dir[0], dir[1], norm])]
 
     def draw_img(self, out_file="results/out.png"):
+        """
+        Draw state of environment as an image.
+        """
+        
         with Image.new(mode="RGB", size=(self.grid_width*self.draw_size, self.grid_height*self.draw_size)) as img:
             draw = ImageDraw.Draw(img)
             
@@ -374,21 +378,11 @@ class ContinuousPathPlanningEnv:
             img.save(out_file)
     
     def _display_console(self):
-        for y in range(0, self.grid_height):
-            for x in range(0, self.grid_width):
-                if x == self.pos[0] and y == self.pos[1]:
-                    print("P", end="")
-                elif x == self.goal[0] and y == self.goal[1]:
-                    print("G", end="")
-                elif self.grid[y, x] == 1:
-                    print("W", end="")
-                elif self.path[y, x] == 1:
-                    print("X", end="")
-                else:
-                    print("+", end="")
-            print("")
-        print("")
-        print("")
+        """
+        Unimplemented.
+        Used to be useful for smaller grids, but lost practicality as grids grew in size.
+        """
+        return
 
     def _display_tk(self):
         self.canvas.delete("all")
@@ -428,6 +422,10 @@ class ContinuousPathPlanningEnv:
         self.tk_root.update()
 
     def display(self):
+        """
+        Display current environment state.
+        """
+
         if self.canvas == None:
             self._display_console()
         else:

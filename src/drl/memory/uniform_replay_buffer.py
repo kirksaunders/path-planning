@@ -1,8 +1,12 @@
 import numpy as np
 
-from replay_buffer import *
+from .replay_buffer import *
 
 class UniformReplayBuffer(ReplayBuffer):
+    """
+    Replay buffer that gives all entries equal priority.
+    """
+
     def __init__(self, capacity, batch_size):
         self.capacity = capacity
         self.batch_size = batch_size
