@@ -13,6 +13,9 @@ from drl.memory.proportional_replay_buffer import *
 # Amount of the map that the agents sees. DIM=5 is 11x11 view. (2*DIM+1)x(2*DIM+1) in general.
 DIM = 5
 
+# Number of frames of input to the network
+NUM_FRAMES = 1
+
 def create_cnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
@@ -20,7 +23,7 @@ def create_cnn():
             kernel_size = 4,
             strides = 1,
             activation = "relu",
-            input_shape = (2*DIM+1, 2*DIM+1, 1)
+            input_shape = (2*DIM+1, 2*DIM+1, NUM_FRAMES)
         ),
         tf.keras.layers.AveragePooling2D(
             pool_size = 2,
@@ -40,7 +43,9 @@ def create_cnn():
 
 def create_dnn():
     return tf.keras.models.Sequential([
-        tf.keras.layers.Dense(16, input_dim = 2, activation = "relu"),
+        tf.keras.layers.InputLayer(input_shape=(2, NUM_FRAMES)),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(16, activation = "relu"),
     ])
 
 def create_actor_model(lr):
@@ -208,7 +213,7 @@ def evaluate(grid, model_file):
         end = np.array([x, y])
         run()
 
-    env = ContinuousPathPlanningEnv(grid, DIM, tk_root, on_click_left, on_click_right)
+    env = ContinuousPathPlanningEnv(grid, DIM, NUM_FRAMES, tk_root, on_click_left, on_click_right)
     env.display()
 
     run()

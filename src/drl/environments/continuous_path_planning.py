@@ -10,7 +10,7 @@ class ContinuousPathPlanningEnv(Environment):
     of arbitrary length and direction (not locked to grid).
     """
 
-    def __init__(self, map, dim, tkinter_root=None, on_click_left=None, on_click_right=None):
+    def __init__(self, map, dim, num_frames=1, tkinter_root=None, on_click_left=None, on_click_right=None):
         # Load grid from map
         img = Image.open(map, "r")
         width, height = img.size
@@ -31,6 +31,9 @@ class ContinuousPathPlanningEnv(Environment):
         self.draw_size = 10
         self.dim = dim
         self.resets = 0
+
+        self.num_frames = num_frames
+        self.state_frames = [np.zeros((height, width, num_frames)), np.zeros(2, num_frames)]
 
         if tkinter_root != None:
             self.tk_root = tkinter_root
@@ -96,7 +99,13 @@ class ContinuousPathPlanningEnv(Environment):
         self.path = [np.array([self.start[0], self.start[1]])]
         self.avg_step_len = 0.0
 
-        return self.get_state()
+        # Make state frames full of identical starting state
+        state = self._get_state_single()
+        for i in range(0, len(state)):
+            for j in range(0, self.num_frames):
+                self.state_frames[i][..., j] = state[i]
+
+        return 
 
     # Source: https://tavianator.com/2011/ray_box.html
     def _intersection(self, pos, dir, dir_norm, dir_inv, grid_pos):
@@ -268,7 +277,7 @@ class ContinuousPathPlanningEnv(Environment):
 
         # Reward component for first order derivative "smoothness".
         # Haven't produced great results yet, needs more work.
-        """if len(self.path) >= 3:
+        """ if len(self.path) >= 3:
             v2 = self.path[-2] - self.path[-3]
             v1 = self.path[-1] - self.path[-2]
 
@@ -280,20 +289,27 @@ class ContinuousPathPlanningEnv(Environment):
             if norm > 0.000001:
                 v2 /= norm
 
-            reward += 0.25 * np.dot(v1, v2)
+            reward += 0.5 * np.dot(v1, v2)
 
             # Reward component for second order derivative "smoothness"
-            reward += 0.15 * np.linalg.norm(self.path[-3] - 2*self.path[-2] + self.path[-1])
+            reward += 0.35 * np.linalg.norm(self.path[-3] - 2*self.path[-2] + self.path[-1]) """
 
-        # Reward component to normalize step length
+        """# Reward component to normalize step length
         dist = np.linalg.norm(self.path[-1] - self.path[-2])
         reward += -0.15 * (self.avg_step_len - dist) ** 2"""
 
+        # Add current state to frame buffer
+        state = self._get_state_single()
+        for i in range(0, len(self.state_frames)):
+            for j in range(1, self.num_frames):
+                self.state_frames[i][..., j-1] = self.state_frames[i][..., j]
+            self.state_frames[i][..., self.num_frames-1] = state[i]
+
         return self.get_state(), reward, terminal
 
-    def get_state(self):
+    def _get_state_single(self):
         """
-        Return current state.
+        Return current state (but only one frame).
         """
 
         grid_pos = np.floor(self.pos).astype(np.int32)
@@ -339,6 +355,13 @@ class ContinuousPathPlanningEnv(Environment):
             dir = dir / norm
 
         return [state, dir]
+
+    def get_state(self):
+        """
+        Return current state.
+        """
+
+        return self.state_frames
 
     def draw_img(self, out_file="results/out.png"):
         """
