@@ -33,7 +33,7 @@ class ContinuousPathPlanningEnv(Environment):
         self.resets = 0
 
         self.num_frames = num_frames
-        self.state_frames = [np.zeros((height, width, num_frames)), np.zeros(2, num_frames)]
+        self.state_frames = [np.zeros((2*dim+1, 2*dim+1, num_frames), dtype=np.float32), np.zeros((2, num_frames), dtype=np.float32)]
 
         if tkinter_root != None:
             self.tk_root = tkinter_root
@@ -105,7 +105,7 @@ class ContinuousPathPlanningEnv(Environment):
             for j in range(0, self.num_frames):
                 self.state_frames[i][..., j] = state[i]
 
-        return 
+        return self.get_state()
 
     # Source: https://tavianator.com/2011/ray_box.html
     def _intersection(self, pos, dir, dir_norm, dir_inv, grid_pos):
@@ -329,7 +329,7 @@ class ContinuousPathPlanningEnv(Environment):
         interp[2, 1] = (1 - abs(dx)) * max(dy, 0.0)
         interp[2, 2] = max(dx, 0.0) * max(dy, 0.0)
 
-        state = np.ones((self.dim*2 + 1, self.dim*2 + 1, 1))
+        state = np.ones((self.dim*2 + 1, self.dim*2 + 1))
         for dy in range(-self.dim, self.dim + 1):
             y = grid_pos[1] + dy
             for dx in range(-self.dim, self.dim + 1):
@@ -346,7 +346,7 @@ class ContinuousPathPlanningEnv(Environment):
                                 spaces[dy2 + 1, dx2 + 1] = self.grid[y2, x2]
 
                 # Apply interpolation coefficients on these spaces
-                state[dy+self.dim, dx+self.dim, 0] = np.sum(np.multiply(spaces, interp))
+                state[dy+self.dim, dx+self.dim] = np.sum(np.multiply(spaces, interp))
 
         # Normalize displacement vector
         dir = self.goal - self.pos

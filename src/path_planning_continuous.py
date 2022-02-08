@@ -149,7 +149,7 @@ def train(grid, model_file = None):
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = ContinuousPathPlanningEnv(grid, DIM, tk_root)
+    env = ContinuousPathPlanningEnv(grid, DIM, NUM_FRAMES, tk_root)
     agent = DDPG(env, actor, critic, rb)
 
     agent.train(0.99, action_noise, max_episode_steps, tau, tau, train_interval, report_interval)

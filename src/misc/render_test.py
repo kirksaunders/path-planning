@@ -5,9 +5,10 @@ import numpy as np
 from PIL import Image, ImageDraw
 import tkinter as tk
 
-from drl.environments.continuous_path_planning import *
+from ..drl.environments.continuous_path_planning import *
 
 DIM = 5
+NUM_FRAMES = 1
 
 tk_root = tk.Tk()
 
@@ -17,14 +18,17 @@ def on_click_left(event):
     x = event.x / env.draw_size
     y = event.y / env.draw_size
     
-    state, reward, terminal = env.step(np.array([x, y]) - env.pos)
+    frames, reward, terminal = env.step(np.array([x, y]) - env.pos)
+    state = [x[..., -1] for x in frames]
     print(reward, terminal)
+    print(frames)
+    print(state[1])
     with Image.new(mode="RGB", size=((2*DIM+1)*25, (2*DIM+1)*25)) as img:
         draw = ImageDraw.Draw(img)
         
         for y in range(0, 2*DIM+1):
             for x in range(0, 2*DIM+1):
-                color = int((1.0 - state[0][y, x, 0]) * 255)
+                color = int((1.0 - state[0][y, x]) * 255)
                 draw.rectangle(
                     xy=[(x*25, y*25), ((x+1)*25, (y+1)*25)],
                     outline=(0, 0, 0),
@@ -73,7 +77,7 @@ def on_click_left(event):
         img.save("overview.png")
     env.display()
 
-env = ContinuousPathPlanningEnv("grid2.bmp", DIM, tk_root, on_click_left)
+env = ContinuousPathPlanningEnv("grids/grid2.bmp", DIM, NUM_FRAMES, tk_root, on_click_left)
 env.reset(random=True)
 env.display()
 
