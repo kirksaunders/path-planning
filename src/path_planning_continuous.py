@@ -14,7 +14,7 @@ from drl.memory.proportional_replay_buffer import *
 DIM = 5
 
 # Number of frames of input to the network
-NUM_FRAMES = 1
+NUM_FRAMES = 4
 
 def create_cnn():
     return tf.keras.models.Sequential([
@@ -170,8 +170,8 @@ def evaluate(grid, model_file):
     #end = np.array([10, 10])
 
     # Grid 5
-    start = np.array([65, 65])
-    end = np.array([10, 10])
+    start = np.array([65, 65], dtype=np.float32)
+    end = np.array([10, 10], dtype=np.float32)
 
     input = 0
 
@@ -201,7 +201,7 @@ def evaluate(grid, model_file):
         x = event.x / env.draw_size
         y = event.y / env.draw_size
 
-        start = np.array([x, y])
+        start = np.array([x, y], dtype=np.float32)
         run()
 
     def on_click_right(event):
@@ -210,7 +210,7 @@ def evaluate(grid, model_file):
         x = event.x / env.draw_size
         y = event.y / env.draw_size
 
-        end = np.array([x, y])
+        end = np.array([x, y], dtype=np.float32)
         run()
 
     env = ContinuousPathPlanningEnv(grid, DIM, NUM_FRAMES, tk_root, on_click_left, on_click_right)

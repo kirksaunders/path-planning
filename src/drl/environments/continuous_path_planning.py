@@ -19,11 +19,11 @@ class ContinuousPathPlanningEnv(Environment):
         self.grid_height = height
         self.grid = np.array(data).reshape((height, width, len(img.getbands())))
         self.grid = self.grid[:, :, 1] # use only first channel
-        self.grid = 1 - np.sign(self.grid)
+        self.grid = 1.0 - np.sign(self.grid)
 
-        self.pos = np.array([0, 0])
-        self.start = np.array([0, 0])
-        self.goal = np.array([0, 0])
+        self.pos = np.array([0, 0], dtype=np.float32)
+        self.start = np.array([0, 0], dtype=np.float32)
+        self.goal = np.array([0, 0], dtype=np.float32)
         self.path = [np.array([self.start[0], self.start[1]])]
         self.avg_step_len = 0.0
 
@@ -81,13 +81,13 @@ class ContinuousPathPlanningEnv(Environment):
         self.resets += 1
         if random:
             while True:
-                self.pos = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
+                self.pos = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height], dtype=np.float32)
                 
                 if self._is_free(self.pos):
                     break
 
             while True:
-                self.goal = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height])
+                self.goal = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height], dtype=np.float32)
                 
                 if not np.array_equal(self.pos, self.goal) and self._is_free(self.goal):
                     break
@@ -258,6 +258,7 @@ class ContinuousPathPlanningEnv(Environment):
         """
 
         action = np.squeeze(action)
+        orig_pos = self.pos
         result = self._move(action)
 
         dist = np.linalg.norm(self.goal - self.pos)
@@ -266,9 +267,13 @@ class ContinuousPathPlanningEnv(Environment):
         reward = 0.0
 
         if terminal:
-            reward += 1000
+            reward += 500
 
-        reward = -dist * 0.05
+        if not result:
+            reward -= 500
+            terminal = True
+
+        #reward += -dist * 0.05
 
         # Reward staying away from walls
         wall_dist = self._wall_distance(self.pos)
@@ -297,6 +302,21 @@ class ContinuousPathPlanningEnv(Environment):
         """# Reward component to normalize step length
         dist = np.linalg.norm(self.path[-1] - self.path[-2])
         reward += -0.15 * (self.avg_step_len - dist) ** 2"""
+
+        # Reward component for going in direction of goal
+        to_goal = (self.goal - orig_pos)
+        to_goal /= np.linalg.norm(to_goal)
+        reward += 2.0 * np.dot(action, to_goal)
+
+        # Punish agent if not moving and terminate episode
+        """ if len(self.path) >= 10:
+            total_dist = 0.0
+            for i in range(-10, -1):
+                total_dist += np.linalg.norm(self.path[i + 1] - self.path[i])
+
+            if total_dist < 0.25:
+                reward -= 250
+                terminal = True """
 
         # Add current state to frame buffer
         state = self._get_state_single()
@@ -361,7 +381,9 @@ class ContinuousPathPlanningEnv(Environment):
         Return current state.
         """
 
-        return self.state_frames
+        # Need to make a copy of state frames because the agent stores
+        # it for later.
+        return [np.copy(x) for x in self.state_frames]
 
     def draw_img(self, out_file="results/out.png"):
         """
