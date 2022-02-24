@@ -269,11 +269,11 @@ class ContinuousPathPlanningEnv(Environment):
         if terminal:
             reward += 500
 
-        if not result:
-            reward -= 500
-            terminal = True
+        #if not result:
+        #    reward -= 500
+        #    terminal = True
 
-        #reward += -dist * 0.05
+        reward += -dist * 0.05
 
         # Reward staying away from walls
         wall_dist = self._wall_distance(self.pos)
@@ -305,8 +305,11 @@ class ContinuousPathPlanningEnv(Environment):
 
         # Reward component for going in direction of goal
         to_goal = (self.goal - orig_pos)
-        to_goal /= np.linalg.norm(to_goal)
-        reward += 2.0 * np.dot(action, to_goal)
+        dot = np.dot(action, to_goal)
+        norm = np.linalg.norm(action)
+        if norm > 0.00001:
+            dot /= norm * np.linalg.norm(to_goal)
+        reward += 1.0 * dot
 
         # Punish agent if not moving and terminate episode
         """ if len(self.path) >= 10:
