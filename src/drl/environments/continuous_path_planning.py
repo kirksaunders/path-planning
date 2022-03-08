@@ -28,7 +28,7 @@ class ContinuousPathPlanningEnv(Environment):
         self.avg_step_len = 0.0
 
         self.rng = np.random.default_rng()
-        self.draw_size = 10
+        self.draw_size = 5
         self.dim = dim
         self.resets = 0
 
@@ -269,9 +269,9 @@ class ContinuousPathPlanningEnv(Environment):
         if terminal:
             reward += 500
 
-        #if not result:
-        #    reward -= 500
-        #    terminal = True
+        if not result:
+            reward -= 500
+            terminal = True
 
         reward += -dist * 0.05
 
@@ -432,44 +432,59 @@ class ContinuousPathPlanningEnv(Environment):
         """
         return
 
-    def _display_tk(self):
-        self.canvas.delete("all")
+    def _display_tk(self, only_latest):
+        if not only_latest:
+            self.canvas.delete("all")
+
+        dist = max(self.grid_width, self.grid_height) + 1
+        if only_latest and len(self.path) > 0:
+            # Only redraw area around current position that changed
+            dist = np.ceil(np.linalg.norm(self.pos - self.path[-1])).astype(np.int32) + 2
+
+        grid_pos = np.floor(self.pos).astype(np.int32)
 
         # Draw grid spaces
-        for y in range(0, self.grid_height):
-            for x in range(0, self.grid_width):
-                color = "#101010" if self.grid[y, x] == 1 else "white"
+        for dy in range(-dist, dist + 1):
+            y = grid_pos[1] + dy
+            if y >= 0 and y < self.grid_height:
+                for dx in range(-dist, dist + 1):
+                    x = grid_pos[0] + dx
+                    if x >= 0 and x < self.grid_width:
+                        color = "#101010" if self.grid[y, x] == 1 else "white"
 
-                self.canvas.create_rectangle(
-                    x*self.draw_size, y*self.draw_size,
-                    (x+1)*self.draw_size + 1, (y+1)*self.draw_size + 1,
-                    fill=color
-                )
+                        self.canvas.create_rectangle(
+                            x*self.draw_size, y*self.draw_size,
+                            (x+1)*self.draw_size, (y+1)*self.draw_size,
+                            fill=color
+                        )
 
         # Draw start
-        ul = (self.start - 0.4) * self.draw_size
-        lr = (self.start + 0.4) * self.draw_size
-        self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="red")
+        if np.linalg.norm(self.start - self.pos) < dist + 2:
+            ul = (self.start - 0.4) * self.draw_size
+            lr = (self.start + 0.4) * self.draw_size
+            self.canvas.create_oval(ul[0], ul[1], lr[0], lr[1], fill="red")
 
         # Draw goal
-        ul = (self.goal - 0.4) * self.draw_size
-        lr = (self.goal + 0.4) * self.draw_size
-        self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="green")
+        if np.linalg.norm(self.goal - self.pos) < dist + 2:
+            ul = (self.goal - 0.4) * self.draw_size
+            lr = (self.goal + 0.4) * self.draw_size
+            self.canvas.create_oval(ul[0], ul[1], lr[0], lr[1], fill="green")
         
         # Draw path taken (ignore first element, it is the start)
         for p in self.path[1:]:
-            ul = (p - 0.25) * self.draw_size
-            lr = (p + 0.25) * self.draw_size
-            self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="cyan")
+            if np.linalg.norm(p - self.pos) < dist + 2:
+                ul = (p - 0.25) * self.draw_size
+                lr = (p + 0.25) * self.draw_size
+                self.canvas.create_oval(ul[0], ul[1], lr[0], lr[1], fill="cyan")
         
         # Draw current position
         ul = (self.pos - 0.4) * self.draw_size
         lr = (self.pos + 0.4) * self.draw_size
-        self.canvas.create_oval(ul[0], ul[1], lr[0] + 1, lr[1] + 1, fill="orange")
+        self.canvas.create_oval(ul[0], ul[1], lr[0], lr[1], fill="orange")
 
         self.tk_root.update()
 
-    def display(self):
+    def display(self, only_latest=False):
         """
         Display current environment state.
         """
@@ -477,5 +492,5 @@ class ContinuousPathPlanningEnv(Environment):
         if self.canvas == None:
             self._display_console()
         else:
-            self._display_tk()
+            self._display_tk(only_latest)
         

@@ -14,7 +14,7 @@ from drl.memory.proportional_replay_buffer import *
 DIM = 5
 
 # Number of frames of input to the network
-NUM_FRAMES = 4
+NUM_FRAMES = 1
 
 def create_cnn():
     return tf.keras.models.Sequential([
@@ -226,13 +226,14 @@ def evaluate(grid, model_file):
 
         total_reward = 0
         state = env.reset(start, end, random=False)
+        env.display()
         for t in range(0, max_episode_steps):
             if input != input_copy:
                 break
             action = actor(state_to_tf_input(state), training=False)
             state, reward, terminal = env.step(action)
             total_reward += reward
-            env.display()
+            env.display(only_latest=True)
             if terminal:
                 break
 
