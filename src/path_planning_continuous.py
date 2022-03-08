@@ -23,30 +23,73 @@ def create_cnn():
             kernel_size = 4,
             strides = 1,
             activation = "relu",
-            input_shape = (2*DIM+1, 2*DIM+1, NUM_FRAMES)
+            data_format = "channels_first",
+            input_shape = (NUM_FRAMES, 2*DIM+1, 2*DIM+1)
         ),
         tf.keras.layers.AveragePooling2D(
             pool_size = 2,
+            data_format = "channels_first"
         ),
         tf.keras.layers.Conv2D(
             filters = 8,
             kernel_size = 2,
             strides = 1,
+            data_format = "channels_first",
             activation = "relu",
         ),
         tf.keras.layers.AveragePooling2D(
             pool_size = 2,
+            data_format = "channels_first"
         ),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(64, activation = "relu"),
     ])
 
+""" def create_cnn():
+    return tf.keras.models.Sequential([
+        tf.keras.layers.Input((NUM_FRAMES, 2*DIM+1, 2*DIM+1)),
+        tf.keras.layers.Reshape((NUM_FRAMES, 1, 2*DIM+1, 2*DIM+1)),
+        tf.keras.layers.TimeDistributed(tf.keras.layers.Conv2D(
+            filters = 4,
+            kernel_size = 4,
+            strides = 1,
+            activation = "relu",
+            data_format = "channels_first",
+        )),
+        tf.keras.layers.TimeDistributed(tf.keras.layers.AveragePooling2D(
+            pool_size = 2,
+            data_format = "channels_first"
+        )),
+        tf.keras.layers.TimeDistributed(tf.keras.layers.Conv2D(
+            filters = 8,
+            kernel_size = 2,
+            strides = 1,
+            data_format = "channels_first",
+            activation = "relu",
+        )),
+        tf.keras.layers.TimeDistributed(tf.keras.layers.AveragePooling2D(
+            pool_size = 2,
+            data_format = "channels_first"
+        )),
+        tf.keras.layers.TimeDistributed(tf.keras.layers.Flatten()),
+        tf.keras.layers.GRU(64),
+        #tf.keras.layers.Dense(64, activation = "relu"),
+    ]) """
+
 def create_dnn():
     return tf.keras.models.Sequential([
-        tf.keras.layers.InputLayer(input_shape=(2, NUM_FRAMES)),
+        tf.keras.layers.InputLayer(input_shape=(NUM_FRAMES, 2)),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(16, activation = "relu"),
     ])
+
+""" def create_dnn():
+    return tf.keras.models.Sequential([
+        tf.keras.layers.InputLayer(input_shape=(NUM_FRAMES, 2)),
+        tf.keras.layers.GRU(16),
+        #tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(16, activation = "relu"),
+    ]) """
 
 def create_actor_model(lr):
     cnn = create_cnn()

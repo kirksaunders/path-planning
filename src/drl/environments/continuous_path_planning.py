@@ -33,7 +33,7 @@ class ContinuousPathPlanningEnv(Environment):
         self.resets = 0
 
         self.num_frames = num_frames
-        self.state_frames = [np.zeros((2*dim+1, 2*dim+1, num_frames), dtype=np.float32), np.zeros((2, num_frames), dtype=np.float32)]
+        self.state_frames = [np.zeros((num_frames, 2*dim+1, 2*dim+1), dtype=np.float32), np.zeros((num_frames, 2), dtype=np.float32)]
 
         if tkinter_root != None:
             self.tk_root = tkinter_root
@@ -103,7 +103,7 @@ class ContinuousPathPlanningEnv(Environment):
         state = self._get_state_single()
         for i in range(0, len(state)):
             for j in range(0, self.num_frames):
-                self.state_frames[i][..., j] = state[i]
+                self.state_frames[i][j, ...] = state[i]
 
         return self.get_state()
 
@@ -325,8 +325,8 @@ class ContinuousPathPlanningEnv(Environment):
         state = self._get_state_single()
         for i in range(0, len(self.state_frames)):
             for j in range(1, self.num_frames):
-                self.state_frames[i][..., j-1] = self.state_frames[i][..., j]
-            self.state_frames[i][..., self.num_frames-1] = state[i]
+                self.state_frames[i][j-1, ...] = self.state_frames[i][j, ...]
+            self.state_frames[i][self.num_frames-1, ...] = state[i]
 
         return self.get_state(), reward, terminal
 
