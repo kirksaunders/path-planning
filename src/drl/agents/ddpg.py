@@ -43,9 +43,9 @@ class DDPG:
         with tf.GradientTape() as tape:
             q_values = self.critic([states, actions], training=True)
             td_error = y - q_values
-            loss = tf.reduce_mean(tf.square(td_error))
+            critic_loss = tf.reduce_mean(tf.square(td_error))
 
-        gradients = tape.gradient(loss, self.critic.trainable_variables)
+        gradients = tape.gradient(critic_loss, self.critic.trainable_variables)
         self.critic.optimizer.apply_gradients(zip(gradients, self.critic.trainable_variables))
 
         # Perform gradient ascent on actor
@@ -53,10 +53,12 @@ class DDPG:
             actions = self.actor(states, training=True)
             q_values = self.critic([states, actions], training=True)
             # Negative for ascent rather than descent
-            loss = -tf.reduce_mean(q_values)
+            actor_loss = -tf.reduce_mean(q_values)
 
-        gradients = tape.gradient(loss, self.actor.trainable_variables)
+        gradients = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
+
+        return critic_loss, actor_loss
 
     @tf.function
     def _train_step_per(self, gamma, states, actions, rewards, terminals, next_states, weights):
@@ -68,9 +70,9 @@ class DDPG:
         with tf.GradientTape() as tape:
             q_values = self.critic([states, actions], training=True)
             td_error = y - q_values
-            loss = tf.reduce_mean(tf.multiply(tf.square(td_error), weights))
+            critic_loss = tf.reduce_mean(tf.multiply(tf.square(td_error), weights))
 
-        gradients = tape.gradient(loss, self.critic.trainable_variables)
+        gradients = tape.gradient(critic_loss, self.critic.trainable_variables)
         self.critic.optimizer.apply_gradients(zip(gradients, self.critic.trainable_variables))
 
         # Perform gradient ascent on actor
@@ -78,19 +80,19 @@ class DDPG:
             actions = tf.squeeze(self.actor(states, training=True))
             q_values = self.critic([states, actions], training=True)
             # Negative for ascent rather than descent
-            loss = -tf.reduce_mean(q_values)
+            actor_loss = -tf.reduce_mean(q_values)
 
-        gradients = tape.gradient(loss, self.actor.trainable_variables)
+        gradients = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
 
-        return tf.squeeze(tf.abs(td_error))
+        return tf.squeeze(tf.abs(td_error)), critic_loss, actor_loss
 
     @tf.function
     def _update_weights(self, target, main, tau):
         for (x, y) in zip(target.variables, main.variables):
             x.assign(tau * y + (1 - tau) * x)
 
-    def train(self, gamma, action_noise, episode_step_limit, tau_actor, tau_critic, train_interval, report_interval):
+    def train(self, gamma, action_noise, episode_step_limit, tau_actor, tau_critic, train_interval, report_interval, log_dir):
         """
         Train agent with parameters:
             gamma: discount factor
@@ -102,10 +104,16 @@ class DDPG:
             report_interval: number of episodes that need to pass for each progress message and network save
         """
 
+        log_writer = tf.summary.create_file_writer(str(log_dir / "logs"))
+        critic_loss_avg = tf.keras.metrics.Mean("critic_loss",  dtype=tf.float32)
+        actor_loss_avg = tf.keras.metrics.Mean("actor_loss",  dtype=tf.float32)
+
         total_rewards = [None] * report_interval
         while True:
             state = self.env.reset()
             total_reward = 0.0
+            critic_loss_avg.reset_states()
+            actor_loss_avg.reset_states()
             for t in range(0, episode_step_limit):
                 self.iterations += 1
 
@@ -118,11 +126,14 @@ class DDPG:
                 if self.replay_buffer.size >= self.replay_buffer.batch_size and self.iterations % train_interval == 0:
                     if self.use_per:
                         states, actions, rewards, terminals, next_states, weights, indices = self.replay_buffer.mini_batch()
-                        priorities = self._train_step_per(gamma, states, actions, rewards, terminals, next_states, weights)
+                        priorities, critic_loss, actor_loss = self._train_step_per(gamma, states, actions, rewards, terminals, next_states, weights)
                         self.replay_buffer.update(indices, priorities.numpy())
                     else:
                         states, actions, rewards, terminals, next_states = self.replay_buffer.mini_batch()
-                        self._train_step(gamma, states, actions, rewards, terminals, next_states)
+                        critic_loss, actor_loss = self._train_step(gamma, states, actions, rewards, terminals, next_states)
+
+                    critic_loss_avg(critic_loss)
+                    actor_loss_avg(actor_loss)
 
                 state = next_state
 
@@ -136,6 +147,11 @@ class DDPG:
             total_rewards[self.episodes % report_interval] = total_reward
             self.episodes += 1
 
+            with log_writer.as_default():
+                tf.summary.scalar("critic_loss", critic_loss_avg.result(), step=self.episodes)
+                tf.summary.scalar("actor_loss", actor_loss_avg.result(), step=self.episodes)
+                tf.summary.scalar("reward", total_reward, step=self.episodes)
+
             if self.episodes % report_interval == 0:
                 r = 0.0
                 c = 0
@@ -145,14 +161,9 @@ class DDPG:
                 print("Episode {}, average reward (of last {}): {}".format(
                     self.episodes, report_interval, r / c))
 
-                # Save networks to results directory
-                self.actor.save("results/ep{}_actor.h5".format(self.episodes))
-                self.critic.save("results/ep{}_critic.h5".format(self.episodes))
-                
-                # Save some meta data about these episodes
-                data = {"rewards":total_rewards}
-                with open("results/ep_{}.meta".format(self.episodes), "w") as file:
-                    file.write(json.dumps(data))
+                # Save networks to log_dir
+                self.actor.save(log_dir / "models/ep{}_actor.h5".format(self.episodes))
+                self.critic.save(log_dir / "models/ep{}_critic.h5".format(self.episodes))
 
                 # Display state of most recent episode
                 self.env.display()

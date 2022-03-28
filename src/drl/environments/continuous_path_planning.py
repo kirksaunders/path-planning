@@ -28,7 +28,7 @@ class ContinuousPathPlanningEnv(Environment):
         self.avg_step_len = 0.0
 
         self.rng = np.random.default_rng()
-        self.draw_size = 5
+        self.draw_size = np.floor(1000.0 / max(self.grid_width, self.grid_height)).astype(np.int32)
         self.dim = dim
         self.resets = 0
 
@@ -269,9 +269,9 @@ class ContinuousPathPlanningEnv(Environment):
         if terminal:
             reward += 500
 
-        if not result:
+        """ if not result:
             reward -= 500
-            terminal = True
+            terminal = True """
 
         reward += -dist * 0.05
 

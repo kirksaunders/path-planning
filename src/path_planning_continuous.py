@@ -1,7 +1,8 @@
+import argparse
 import numpy as np
-import sys
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+from pathlib import Path
 import tensorflow as tf
 import tkinter as tk
 
@@ -19,25 +20,25 @@ NUM_FRAMES = 1
 def create_cnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
-            filters = 4,
+            filters = 16,
             kernel_size = 4,
             strides = 1,
             activation = "relu",
             data_format = "channels_first",
             input_shape = (NUM_FRAMES, 2*DIM+1, 2*DIM+1)
         ),
-        tf.keras.layers.AveragePooling2D(
+        tf.keras.layers.MaxPooling2D(
             pool_size = 2,
             data_format = "channels_first"
         ),
         tf.keras.layers.Conv2D(
-            filters = 8,
+            filters = 32,
             kernel_size = 2,
             strides = 1,
             data_format = "channels_first",
             activation = "relu",
         ),
-        tf.keras.layers.AveragePooling2D(
+        tf.keras.layers.MaxPooling2D(
             pool_size = 2,
             data_format = "channels_first"
         ),
@@ -163,7 +164,7 @@ class OUActionNoise:
         else:
             self.x_prev = np.zeros_like(self.mean)
 
-def train(grid, model_file = None):
+def train(args):
     tk_root = tk.Tk()
 
     max_episode_steps = 400
@@ -171,18 +172,18 @@ def train(grid, model_file = None):
     train_interval = 1
     report_interval = 5
 
-    learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.995)
-    learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.995)
+    learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.0001, max_episode_steps, 0.995)
+    learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.001, max_episode_steps, 0.995)
     action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
     tau = 0.001
     beta = lambda it: min(1.0, 0.5 + it*0.00001)
 
-    if model_file == None:
+    if args.model == None:
         actor = create_actor_model(learning_rate_actor)
         critic = create_critic_model(learning_rate_critic)
     else:
-        actor = tf.keras.models.load_model(model_file + "_actor.h5")
-        critic = tf.keras.models.load_model(model_file + "_critic.h5")
+        actor = tf.keras.models.load_model(args.model / "_actor.h5")
+        critic = tf.keras.models.load_model(args.model / "_critic.h5")
 
     # Plot network structure
     """from tensorflow.keras.utils import plot_model
@@ -192,17 +193,17 @@ def train(grid, model_file = None):
     #rb = UniformReplayBuffer(1000000, batch_size)
     rb = ProportionalReplayBuffer(1000000, batch_size, 0.6, beta)
 
-    env = ContinuousPathPlanningEnv(grid, DIM, NUM_FRAMES, tk_root)
+    env = ContinuousPathPlanningEnv(args.grid, DIM, NUM_FRAMES, tk_root)
     agent = DDPG(env, actor, critic, rb)
 
-    agent.train(0.99, action_noise, max_episode_steps, tau, tau, train_interval, report_interval)
+    agent.train(0.99, action_noise, max_episode_steps, tau, tau, train_interval, report_interval, args.save_dir)
 
-def evaluate(grid, model_file):
+def evaluate(args):
     tk_root = tk.Tk()
 
     max_episode_steps = 500
 
-    actor = tf.keras.models.load_model(model_file + "_actor.h5")
+    actor = tf.keras.models.load_model(args.model / "_actor.h5")
 
     # Grid 3
     #start = np.array([90, 90])
@@ -257,17 +258,32 @@ def evaluate(grid, model_file):
         end = np.array([x, y], dtype=np.float32)
         run()
 
-    env = ContinuousPathPlanningEnv(grid, DIM, NUM_FRAMES, tk_root, on_click_left, on_click_right)
+    env = ContinuousPathPlanningEnv(args.grid, DIM, NUM_FRAMES, tk_root, on_click_left, on_click_right)
     env.display()
 
     run()
 
     tk_root.mainloop()
 
+parser = argparse.ArgumentParser()
+parser.add_argument("-d", "--save_dir", type=Path, required=True,
+                    help="The path to save model checkpoints and logs to")
+parser.add_argument("-g", "--grid", type=Path, required=True,
+                    help="The grid to use for training/evaluation")
+parser.add_argument("-e", "--eval", default=False, action="store_true", required=False,
+                    help="Whether to perform evaluation of a model rather than training")
+parser.add_argument("-m", "--model", type=Path, required=False,
+                    help="The model file to use for evaluation or as a starting point for training")
+
 if __name__=='__main__':
-    if len(sys.argv) >= 4 and sys.argv[2] == "evaluate":
-        evaluate(sys.argv[1], sys.argv[3])
-    elif len(sys.argv) >= 4 and sys.argv[2] == "resume":
-        train(sys.argv[1], sys.argv[3])
-    elif len(sys.argv) >= 3 and sys.argv[2] == "train":
-        train(sys.argv[1])
+    args = parser.parse_args()
+
+    if args.eval:
+        if args.model is None:
+            parser.error("--eval requires --model to be defined")
+        
+        evaluate(args)
+    else:
+        args.save_dir.mkdir(exist_ok=False)
+
+        train(args)
