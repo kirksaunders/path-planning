@@ -182,8 +182,8 @@ def train(args):
         actor = create_actor_model(learning_rate_actor)
         critic = create_critic_model(learning_rate_critic)
     else:
-        actor = tf.keras.models.load_model(args.model / "_actor.h5")
-        critic = tf.keras.models.load_model(args.model / "_critic.h5")
+        actor = tf.keras.models.load_model(str(args.model) + "_actor.h5")
+        critic = tf.keras.models.load_model(str(args.model) + "_critic.h5")
 
     # Plot network structure
     """from tensorflow.keras.utils import plot_model
@@ -203,7 +203,7 @@ def evaluate(args):
 
     max_episode_steps = 500
 
-    actor = tf.keras.models.load_model(args.model / "_actor.h5")
+    actor = tf.keras.models.load_model(str(args.model) + "_actor.h5")
 
     # Grid 3
     #start = np.array([90, 90])
