@@ -110,7 +110,7 @@ class DDPG:
 
         total_rewards = [None] * report_interval
         while True:
-            state = self.env.reset()
+            state = self.env.reset(start=np.array([70.0, 70.0]), goal=np.array([5.0, 5.0]))
             total_reward = 0.0
             critic_loss_avg.reset_states()
             actor_loss_avg.reset_states()

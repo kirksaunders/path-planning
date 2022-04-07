@@ -20,25 +20,25 @@ NUM_FRAMES = 1
 def create_cnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
-            filters = 16,
+            filters = 4,
             kernel_size = 4,
             strides = 1,
             activation = "relu",
             data_format = "channels_first",
             input_shape = (NUM_FRAMES, 2*DIM+1, 2*DIM+1)
         ),
-        tf.keras.layers.MaxPooling2D(
+        tf.keras.layers.AveragePooling2D(
             pool_size = 2,
             data_format = "channels_first"
         ),
         tf.keras.layers.Conv2D(
-            filters = 32,
+            filters = 8,
             kernel_size = 2,
             strides = 1,
             data_format = "channels_first",
             activation = "relu",
         ),
-        tf.keras.layers.MaxPooling2D(
+        tf.keras.layers.AveragePooling2D(
             pool_size = 2,
             data_format = "channels_first"
         ),
@@ -131,7 +131,7 @@ def create_critic_model(lr):
     model = tf.keras.models.Model([[cnn.input, dnn.input], action_input], output)
 
     model.compile(
-        optimizer = tf.keras.optimizers.Adam(lr)
+        optimizer = tf.keras.optimizers.Adam(lr, clipnorm=1.0)
     )
 
     return model
@@ -172,8 +172,8 @@ def train(args):
     train_interval = 1
     report_interval = 5
 
-    learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.0001, max_episode_steps, 0.995)
-    learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.001, max_episode_steps, 0.995)
+    learning_rate_actor = tf.keras.optimizers.schedules.ExponentialDecay(0.00015, max_episode_steps, 0.995)
+    learning_rate_critic = tf.keras.optimizers.schedules.ExponentialDecay(0.0015, max_episode_steps, 0.995)
     action_noise = OUActionNoise(np.zeros(2), 0.2 * np.ones(2))
     tau = 0.001
     beta = lambda it: min(1.0, 0.5 + it*0.00001)

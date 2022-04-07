@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image, ImageDraw
+from shapely import geometry, affinity
 import tkinter as tk
 
 from .environment import Environment
@@ -18,6 +19,7 @@ class ContinuousPathPlanningEnv(Environment):
         self.grid_width = width
         self.grid_height = height
         self.grid = np.array(data).reshape((height, width, len(img.getbands())))
+        self.axis = None
         self.grid = self.grid[:, :, 1] # use only first channel
         self.grid = 1.0 - np.sign(self.grid)
 
@@ -30,7 +32,6 @@ class ContinuousPathPlanningEnv(Environment):
         self.rng = np.random.default_rng()
         self.draw_size = np.floor(1000.0 / max(self.grid_width, self.grid_height)).astype(np.int32)
         self.dim = dim
-        self.resets = 0
 
         self.num_frames = num_frames
         self.state_frames = [np.zeros((num_frames, 2*dim+1, 2*dim+1), dtype=np.float32), np.zeros((num_frames, 2), dtype=np.float32)]
@@ -72,32 +73,45 @@ class ContinuousPathPlanningEnv(Environment):
 
         return free
 
-    def reset(self, start=np.array([0, 0]), goal=np.array([0, 0]), random=True):
+    def reset(self, start=None, goal=None):
         """
         Reset environment to either a random or given state.
         Returns state value for network.
         """
 
-        self.resets += 1
-        if random:
+        dist = 30.0
+
+        if start is None:
             while True:
                 self.pos = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height], dtype=np.float32)
                 
                 if self._is_free(self.pos):
                     break
+        else:
+            self.pos = start
 
+        if goal is None:
             while True:
                 self.goal = np.array([self.rng.random() * self.grid_width, self.rng.random() * self.grid_height], dtype=np.float32)
                 
                 if not np.array_equal(self.pos, self.goal) and self._is_free(self.goal):
                     break
         else:
-            self.pos = start
             self.goal = goal
 
         self.start = self.pos
         self.path = [np.array([self.start[0], self.start[1]])]
         self.avg_step_len = 0.0
+
+        # Calculate view axis and transformation matrix
+        self.axis = self.goal - self.start
+        self.axis /= np.linalg.norm(self.axis)
+        angle = np.arctan2(-self.axis[1], self.axis[0]) - np.pi/2
+        self.axis_angle = angle
+        self.axis_matrix = np.array([[np.cos(angle), -np.sin(angle)],
+                                     [-np.sin(angle), -np.cos(angle)]])
+        self.axis_matrix_inv = self.axis_matrix
+        self.axis_matrix = np.transpose(self.axis_matrix)
 
         # Make state frames full of identical starting state
         state = self._get_state_single()
@@ -257,6 +271,9 @@ class ContinuousPathPlanningEnv(Environment):
         Take given action and return next state, reward, and whether episode should terminate.
         """
 
+        # Translate local space direction into world space
+        action = np.matmul(action, self.axis_matrix)
+
         action = np.squeeze(action)
         orig_pos = self.pos
         result = self._move(action)
@@ -269,11 +286,12 @@ class ContinuousPathPlanningEnv(Environment):
         if terminal:
             reward += 500
 
-        """ if not result:
+        if not result:
             reward -= 500
-            terminal = True """
+            terminal = True
 
         reward += -dist * 0.15
+        #reward -= 0.5
 
         # Reward staying away from walls
         wall_dist = self._wall_distance(self.pos)
@@ -304,12 +322,12 @@ class ContinuousPathPlanningEnv(Environment):
         reward += -0.15 * (self.avg_step_len - dist) ** 2"""
 
         # Reward component for going in direction of goal
-        to_goal = (self.goal - orig_pos)
+        """ to_goal = (self.goal - orig_pos)
         dot = np.dot(action, to_goal)
         norm = np.linalg.norm(action)
         if norm > 0.00001:
             dot /= norm * np.linalg.norm(to_goal)
-        reward += 0.5 * dot
+        reward += 0.25 * dot """
 
         # Punish agent if not moving and terminate episode
         """ if len(self.path) >= 10:
@@ -330,6 +348,34 @@ class ContinuousPathPlanningEnv(Environment):
 
         return self.get_state(), reward, terminal
 
+    def _calculate_area(self, center):
+        """
+        Uses Shapely to calculate the intersection area of wall grid spaces with rotated
+        grid space of local view area of agent.
+        """
+
+        grid_pos = np.floor(center).astype(np.int32)
+
+        if grid_pos[0] >= 0 and grid_pos[0] < self.grid_width and grid_pos[1] >= 0 and grid_pos[1] < self.grid_height:
+            return self.grid[grid_pos[1], grid_pos[0]]
+        else:
+            return 1.0
+
+        """ rotated = geometry.box(-0.5, -0.5, 0.5, 0.5)
+        rotated = affinity.rotate(rotated, self.axis_angle)
+        rotated = affinity.translate(rotated, center[0], center[1])
+
+        area = 0.0
+        for dy in range(-1, 2):
+            y = grid_pos[1] + dy
+            for dx in range(-1, 2):
+                x = grid_pos[0] + dx
+                if x < 0 or x >= self.grid_width or y < 0 or y >= self.grid_height or self.grid[y, x] == 1:
+                    box = geometry.box(x, y, x + 1.0, y + 1.0)
+                    area += rotated.intersection(box).area
+
+        return area """
+
     def _get_state_single(self):
         """
         Return current state (but only one frame).
@@ -338,7 +384,7 @@ class ContinuousPathPlanningEnv(Environment):
         grid_pos = np.floor(self.pos).astype(np.int32)
 
         # Build coeff matrix for performing bilinear interpolation (very similar to a convolution)
-        dpos = self.pos - (grid_pos + 0.5)
+        """ dpos = self.pos - (grid_pos + 0.5)
         dx = dpos[0]
         dy = dpos[1]
         interp = np.zeros((3, 3))
@@ -369,13 +415,25 @@ class ContinuousPathPlanningEnv(Environment):
                                 spaces[dy2 + 1, dx2 + 1] = self.grid[y2, x2]
 
                 # Apply interpolation coefficients on these spaces
-                state[dy+self.dim, dx+self.dim] = np.sum(np.multiply(spaces, interp))
+                state[dy+self.dim, dx+self.dim] = np.sum(np.multiply(spaces, interp)) """
+
+        vert_axis = -self.axis
+        horiz_axis = np.array([vert_axis[1], -vert_axis[0]])
+
+        state = np.zeros((self.dim*2 + 1, self.dim*2 + 1))
+        for dy in range(-self.dim, self.dim + 1):
+            for dx in range(-self.dim, self.dim + 1):
+                center = self.pos + vert_axis * dy + horiz_axis * dx
+                state[dy+self.dim, dx+self.dim] = self._calculate_area(center)
 
         # Normalize displacement vector
         dir = self.goal - self.pos
         norm = np.linalg.norm(dir)
         if norm > 0.000001:
             dir = dir / norm
+
+        # Translate dir into local orientation space
+        dir = np.matmul(dir, self.axis_matrix_inv)
 
         return [state, dir]
 
@@ -432,7 +490,7 @@ class ContinuousPathPlanningEnv(Environment):
         """
         return
 
-    def _display_tk(self, only_latest):
+    def _display_tk(self, only_latest=False):
         if not only_latest:
             self.canvas.delete("all")
 
@@ -459,20 +517,20 @@ class ContinuousPathPlanningEnv(Environment):
                         )
 
         # Draw start
-        if np.linalg.norm(self.start - self.pos) < dist + 2:
+        if not only_latest or np.linalg.norm(self.start - self.pos) < dist + 2:
             ul = (self.start - 0.4) * self.draw_size
             lr = (self.start + 0.4) * self.draw_size
             self.canvas.create_oval(ul[0], ul[1], lr[0], lr[1], fill="red")
 
         # Draw goal
-        if np.linalg.norm(self.goal - self.pos) < dist + 2:
+        if not only_latest or np.linalg.norm(self.goal - self.pos) < dist + 2:
             ul = (self.goal - 0.4) * self.draw_size
             lr = (self.goal + 0.4) * self.draw_size
             self.canvas.create_oval(ul[0], ul[1], lr[0], lr[1], fill="green")
         
         # Draw path taken (ignore first element, it is the start)
         for p in self.path[1:]:
-            if np.linalg.norm(p - self.pos) < dist + 2:
+            if not only_latest or np.linalg.norm(p - self.pos) < dist + 2:
                 ul = (p - 0.25) * self.draw_size
                 lr = (p + 0.25) * self.draw_size
                 self.canvas.create_oval(ul[0], ul[1], lr[0], lr[1], fill="cyan")
