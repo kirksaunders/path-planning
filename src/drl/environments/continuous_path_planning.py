@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image, ImageDraw
-from shapely import geometry, affinity
+#from shapely import geometry, affinity
 import tkinter as tk
 
 from .environment import Environment
@@ -270,11 +270,11 @@ class ContinuousPathPlanningEnv(Environment):
         """
         Take given action and return next state, reward, and whether episode should terminate.
         """
+        action = np.squeeze(action)
 
         # Translate local space direction into world space
         action = np.matmul(action, self.axis_matrix)
 
-        action = np.squeeze(action)
         orig_pos = self.pos
         result = self._move(action)
 
@@ -283,61 +283,26 @@ class ContinuousPathPlanningEnv(Environment):
 
         reward = 0.0
 
+        # Goal reward
         if terminal:
             reward += 500
 
-        if not result:
-            reward -= 500
-            terminal = True
+        # Terminate episode if hit wall?
+        #if not result:
+        #    reward -= 500
+        #    terminal = True
 
-        reward += -dist * 0.15
-        #reward -= 0.5
+        reward += -dist * 0.05
 
         # Reward staying away from walls
         wall_dist = self._wall_distance(self.pos)
         if not wall_dist is None:
             reward += 0.5 * max(-0.6 * np.power(wall_dist + 0.5, -1.75), -2.0)
 
-        # Reward component for first order derivative "smoothness".
-        # Haven't produced great results yet, needs more work.
-        """ if len(self.path) >= 3:
-            v2 = self.path[-2] - self.path[-3]
-            v1 = self.path[-1] - self.path[-2]
-
-            norm = np.linalg.norm(v1)
-            if norm > 0.000001:
-                v1 /= norm
-
-            norm = np.linalg.norm(v2)
-            if norm > 0.000001:
-                v2 /= norm
-
-            reward += 0.5 * np.dot(v1, v2)
-
-            # Reward component for second order derivative "smoothness"
-            reward += 0.35 * np.linalg.norm(self.path[-3] - 2*self.path[-2] + self.path[-1]) """
-
-        """# Reward component to normalize step length
-        dist = np.linalg.norm(self.path[-1] - self.path[-2])
-        reward += -0.15 * (self.avg_step_len - dist) ** 2"""
-
         # Reward component for going in direction of goal
-        """ to_goal = (self.goal - orig_pos)
-        dot = np.dot(action, to_goal)
-        norm = np.linalg.norm(action)
-        if norm > 0.00001:
-            dot /= norm * np.linalg.norm(to_goal)
-        reward += 0.25 * dot """
-
-        # Punish agent if not moving and terminate episode
-        """ if len(self.path) >= 10:
-            total_dist = 0.0
-            for i in range(-10, -1):
-                total_dist += np.linalg.norm(self.path[i + 1] - self.path[i])
-
-            if total_dist < 0.25:
-                reward -= 250
-                terminal = True """
+        to_goal = (self.goal - orig_pos)
+        dot = np.dot(action, to_goal) / np.linalg.norm(to_goal)
+        reward += 0.5 * dot
 
         # Add current state to frame buffer
         state = self._get_state_single()

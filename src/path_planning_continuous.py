@@ -21,13 +21,13 @@ def create_cnn():
     return tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(
             filters = 4,
-            kernel_size = 4,
+            kernel_size = 2,
             strides = 1,
             activation = "relu",
             data_format = "channels_first",
             input_shape = (NUM_FRAMES, 2*DIM+1, 2*DIM+1)
         ),
-        tf.keras.layers.AveragePooling2D(
+        tf.keras.layers.MaxPool2D(
             pool_size = 2,
             data_format = "channels_first"
         ),
@@ -35,10 +35,10 @@ def create_cnn():
             filters = 8,
             kernel_size = 2,
             strides = 1,
-            data_format = "channels_first",
             activation = "relu",
+            data_format = "channels_first",
         ),
-        tf.keras.layers.AveragePooling2D(
+        tf.keras.layers.MaxPooling2D(
             pool_size = 2,
             data_format = "channels_first"
         ),
@@ -125,7 +125,7 @@ def create_critic_model(lr):
 
     x = tf.keras.layers.concatenate([state_output, action_output])
     x = tf.keras.layers.Dense(128, activation = "relu")(x)
-    x = tf.keras.layers.Dense(64, activation = "relu")(x)
+    x = tf.keras.layers.Dense(64, activation = "linear")(x)
     output = tf.keras.layers.Dense(1, activation = "linear", kernel_initializer=initializer)(x)
 
     model = tf.keras.models.Model([[cnn.input, dnn.input], action_input], output)

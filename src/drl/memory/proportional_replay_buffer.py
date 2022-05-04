@@ -64,8 +64,10 @@ class ProportionalReplayBuffer(PrioritizedReplayBuffer):
         self.next = (self.next + 1) % self.capacity
 
         #assert self._is_sumtree()
+        #assert self._indices_consistent()
 
     def update(self, indices, priorities):
+        priorities = np.squeeze(priorities)
         priorities = np.power(priorities, self.alpha) + 0.001
         self.max_priority = max(self.max_priority, np.max(priorities))
         for (index, priority) in zip(indices, priorities):
@@ -74,6 +76,7 @@ class ProportionalReplayBuffer(PrioritizedReplayBuffer):
             self._propagate(tree_index, priority - old)
 
         #assert self._is_sumtree()
+        #assert self._indices_consistent()
 
     def _is_sumtree(self):
         for i in range(0, self.tree_size):
@@ -91,6 +94,17 @@ class ProportionalReplayBuffer(PrioritizedReplayBuffer):
                 sum += self.tree[right_child][0]
 
             if not leaf and abs(self.tree[i][0] - sum) > 0.0001:
+                return False
+        
+        return True
+
+    def _indices_consistent(self):
+        for i in range(0, self.tree_size):
+            left_child = 2*i + 1
+            right_child = left_child + 1
+            leaf = left_child >= self.tree_size and right_child >= self.tree_size
+
+            if leaf and self.data[self.tree[i][1]][5] != i:
                 return False
         
         return True

@@ -1,14 +1,15 @@
 # Renders grids as bigger PNG images.
+# Run from project root with command: python -m src.misc.render_grid
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-maps = ["grid3", "grid4", "grid5"]
+maps = ["grid_general2", "west_green_small"]
 draw_size = 10
 
 for map in maps:
     # Load grid from map
-    img = Image.open(map + ".bmp", "r")
+    img = Image.open("grids/" + map + ".bmp", "r")
     width, height = img.size
     data = img.getdata()
     grid_width = width
@@ -30,4 +31,4 @@ for map in maps:
                     fill=color
                 )
 
-        img.save("docs/graphics/" + map + ".png")
+        img.save("docs-new/graphics/" + map + ".png")

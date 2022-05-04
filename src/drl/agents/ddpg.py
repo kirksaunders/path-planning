@@ -1,4 +1,3 @@
-import json
 import numpy as np
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -50,8 +49,8 @@ class DDPG:
 
         # Perform gradient ascent on actor
         with tf.GradientTape() as tape:
-            actions = self.actor(states, training=True)
-            q_values = self.critic([states, actions], training=True)
+            new_actions = self.actor(states, training=True)
+            q_values = self.critic([states, new_actions], training=True)
             # Negative for ascent rather than descent
             actor_loss = -tf.reduce_mean(q_values)
 
@@ -62,7 +61,7 @@ class DDPG:
 
     @tf.function
     def _train_step_per(self, gamma, states, actions, rewards, terminals, next_states, weights):
-        next_actions = tf.squeeze(self.actor_target(next_states, training=True))
+        next_actions = self.actor_target(next_states, training=True)
         q_next_values = self.critic_target([next_states, next_actions], training=True)
         y = rewards + gamma * tf.multiply(q_next_values, 1.0 - tf.cast(terminals, tf.float32))
 
@@ -77,15 +76,15 @@ class DDPG:
 
         # Perform gradient ascent on actor
         with tf.GradientTape() as tape:
-            actions = tf.squeeze(self.actor(states, training=True))
-            q_values = self.critic([states, actions], training=True)
+            new_actions = self.actor(states, training=True)
+            q_values = self.critic([states, new_actions], training=True)
             # Negative for ascent rather than descent
             actor_loss = -tf.reduce_mean(q_values)
 
         gradients = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
 
-        return tf.squeeze(tf.abs(td_error)), critic_loss, actor_loss
+        return tf.abs(td_error), critic_loss, actor_loss
 
     @tf.function
     def _update_weights(self, target, main, tau):
@@ -102,6 +101,7 @@ class DDPG:
             tau_actor: amount to move target critic network towards learned network each step
             train_interval: number of iterations that need to pass for each training step
             report_interval: number of episodes that need to pass for each progress message and network save
+            log_dir: directory to save logs to
         """
 
         log_writer = tf.summary.create_file_writer(str(log_dir / "logs"))
@@ -118,7 +118,11 @@ class DDPG:
                 self.iterations += 1
 
                 action = self.actor(state_to_tf_input(state)).numpy() + action_noise(self.iterations)
-                action = np.squeeze(action)
+                action = action.reshape(action.shape[1:])
+                norm = np.linalg.norm(action)
+                if norm > 1.0:
+                    action /= norm
+                #action = np.clip(action, -1.0, 1.0)
                 next_state, reward, terminal = self.env.step(action)
                 total_reward += reward
                 self.replay_buffer.add([state, action, reward, terminal, next_state])
@@ -164,6 +168,24 @@ class DDPG:
                 # Save networks to log_dir
                 self.actor.save(log_dir / "models/ep{}_actor.h5".format(self.episodes))
                 self.critic.save(log_dir / "models/ep{}_critic.h5".format(self.episodes))
+
+                # Display and print result _without_ action noise
+                state = self.env.reset(start=np.array([70.0, 70.0]), goal=np.array([5.0, 5.0]))
+                total_reward = 0.0
+                for t in range(0, episode_step_limit):
+                    self.iterations += 1
+
+                    action = self.actor(state_to_tf_input(state)).numpy()
+                    action = action.reshape(action.shape[1:])
+                    next_state, reward, terminal = self.env.step(action)
+                    total_reward += reward
+
+                    state = next_state
+
+                    if terminal:
+                        break
+
+                print("Test reward: {}".format(total_reward))
 
                 # Display state of most recent episode
                 self.env.display()
